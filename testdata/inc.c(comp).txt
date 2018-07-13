@@ -1,0 +1,39 @@
+1: int inc(int x) {
+2:     return x + 1;
+    ENT  0
+    LEA  2
+    LI  
+    PSH 
+    IMM  1
+    ADD 
+    LEV 
+3: }
+    LEV 
+4: 
+5: int add2(int x) {
+6:     return inc(inc(x));
+    ENT  0
+    LEA  2
+    LI  
+    PSH 
+    JSR  40304724
+    ADJ  1
+    PSH 
+    JSR  40304724
+    ADJ  1
+    LEV 
+7: }
+    LEV 
+8: 
+9: int main(int argc, char **argv) {
+10:     return add2(argc);
+    ENT  0
+    LEA  3
+    LI  
+    PSH 
+    JSR  40304768
+    ADJ  1
+    LEV 
+11: }
+    LEV 
+12: 

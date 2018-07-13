@@ -1,0 +1,163 @@
+1: #include <stdio.h>
+2: #include <stdlib.h>
+3: 
+4: int my_atoi(char *s) {
+5:     int res;
+6:     res = 0;
+    ENT  1
+    LEA  -1
+    PSH 
+    IMM  0
+    SI  
+7:     while (*s) {
+    LEA  2
+    LI  
+    LC  
+    BZ   0
+8:         if (*s < '0' || '9' < *s) 
+    LEA  2
+    LI  
+    LC  
+    PSH 
+    IMM  48
+    LT  
+    BNZ  43778260
+    IMM  57
+    PSH 
+    LEA  2
+    LI  
+    LC  
+    LT  
+9:             return 0;
+    BZ   0
+    IMM  0
+    LEV 
+10:         res = res * 10 + (*s - '0');
+    LEA  -1
+    PSH 
+    LEA  -1
+    LI  
+    PSH 
+    IMM  10
+    MUL 
+    PSH 
+    LEA  2
+    LI  
+    LC  
+    PSH 
+    IMM  48
+    SUB 
+    ADD 
+    SI  
+11:         ++s;
+    LEA  2
+    PSH 
+    LI  
+    PSH 
+    IMM  1
+    ADD 
+    SI  
+12:     }
+13:     return res;
+    JMP  43778164
+    LEA  -1
+    LI  
+    LEV 
+14: }
+    LEV 
+15: 
+16: int fib(int n) {
+17:     if (n < 2) return 1;
+    ENT  0
+    LEA  2
+    LI  
+    PSH 
+    IMM  2
+    LT  
+    BZ   0
+    IMM  1
+    LEV 
+18:     return fib(n - 1) + fib(n - 2);
+    LEA  2
+    LI  
+    PSH 
+    IMM  1
+    SUB 
+    PSH 
+    JSR  43778428
+    ADJ  1
+    PSH 
+    LEA  2
+    LI  
+    PSH 
+    IMM  2
+    SUB 
+    PSH 
+    JSR  43778428
+    ADJ  1
+    ADD 
+    LEV 
+19: }
+    LEV 
+20: 
+21: int main(int argc, char **argv) {
+22:     int n;
+23:     if (argc < 2) { printf("Usage: %s <number>\n", argv[0]); exit(1); }
+    ENT  1
+    LEA  3
+    LI  
+    PSH 
+    IMM  2
+    LT  
+    BZ   0
+    IMM  44040280
+    PSH 
+    LEA  2
+    LI  
+    PSH 
+    IMM  0
+    PSH 
+    IMM  4
+    MUL 
+    ADD 
+    LI  
+    PSH 
+    PRTF
+    ADJ  2
+    IMM  1
+    PSH 
+    EXIT
+    ADJ  1
+24: 
+25:     n = my_atoi(argv[1]);
+    LEA  -1
+    PSH 
+    LEA  2
+    LI  
+    PSH 
+    IMM  1
+    PSH 
+    IMM  4
+    MUL 
+    ADD 
+    LI  
+    PSH 
+    JSR  43778132
+    ADJ  1
+    SI  
+26:     printf("%d\n", fib(n));
+    IMM  44040300
+    PSH 
+    LEA  -1
+    LI  
+    PSH 
+    JSR  43778428
+    ADJ  1
+    PSH 
+    PRTF
+    ADJ  2
+27:     return 0;
+    IMM  0
+    LEV 
+28: }
+    LEV 

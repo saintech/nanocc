@@ -1,0 +1,13 @@
+1: #include <stdio.h>
+2: 
+3: int main()
+4: {
+5:   printf("hello, world\n");
+    ENT  0
+    IMM  44367960
+    PSH 
+    PRTF
+    ADJ  1
+6:   return 0;
+    IMM  0
+    LEV 

@@ -1,0 +1,10 @@
+1> ENT  0
+2> LEA  3
+3> LI  
+4> PSH 
+5> IMM  1
+6> ADD 
+7> LEV 
+8> PSH 
+9> EXIT
+exit(4) cycle = 9

@@ -1,0 +1,11 @@
+1: int main(int argc, char **argv) {
+2:     return argc + 1;
+    ENT  0
+    LEA  3
+    LI  
+    PSH 
+    IMM  1
+    ADD 
+    LEV 
+3: }
+    LEV 

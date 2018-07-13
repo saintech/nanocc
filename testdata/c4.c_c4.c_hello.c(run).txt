@@ -1,0 +1,4 @@
+hello, world
+exit(0) cycle = 9
+exit(0) cycle = 25983
+exit(0) cycle = 10056655

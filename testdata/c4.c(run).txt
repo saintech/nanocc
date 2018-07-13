@@ -1,0 +1,47 @@
+1> ENT  12
+2> LEA  3
+3> PSH 
+4> LI  
+5> PSH 
+6> IMM  1
+7> SUB 
+8> SI  
+9> LEA  2
+10> PSH 
+11> LI  
+12> PSH 
+13> IMM  4
+14> ADD 
+15> SI  
+16> LEA  3
+17> LI  
+18> PSH 
+19> IMM  0
+20> GT  
+21> BZ   40327792
+22> BZ   40327852
+23> BZ   40327956
+24> LEA  3
+25> LI  
+26> PSH 
+27> IMM  0
+28> GT  
+29> BZ   40328028
+30> BZ   40328088
+31> BZ   40328192
+32> LEA  3
+33> LI  
+34> PSH 
+35> IMM  1
+36> LT  
+37> BZ   40328264
+38> IMM  40567800
+39> PSH 
+40> PRTF
+usage: c4 [-s] [-d] file ...
+41> ADJ  1
+42> IMM  -1
+43> LEV 
+44> PSH 
+45> EXIT
+exit(-1) cycle = 45

@@ -1,0 +1,7064 @@
+1: // c4.c - C in four functions
+2: 
+3: // char, int, and pointer types
+4: // if, while, return, and expression statements
+5: // just enough features to allow self-compilation and a bit more
+6: 
+7: // Written by Robert Swierczek
+8: 
+9: #include <stdio.h>
+10: #include <stdlib.h>
+11: #include <memory.h>
+12: #include <unistd.h>
+13: #include <fcntl.h>
+14: 
+15: char *p, *lp, // current position in source code
+16:      *data;   // data/bss pointer
+17: 
+18: int *e, *le,  // current position in emitted code
+19:     *id,      // currently parsed identifier
+20:     *sym,     // symbol table (simple list of identifiers)
+21:     tk,       // current token
+22:     ival,     // current token value
+23:     ty,       // current expression type
+24:     loc,      // local variable offset
+25:     line,     // current line number
+26:     src,      // print source and assembly flag
+27:     debug;    // print executed instructions
+28: 
+29: // tokens and classes (operators last and in precedence order)
+30: enum {
+31:   Num = 128, Fun, Sys, Glo, Loc, Id,
+32:   Char, Else, Enum, If, Int, Return, Sizeof, While,
+33:   Assign, Cond, Lor, Lan, Or, Xor, And, Eq, Ne, Lt, Gt, Le, Ge, Shl, Shr, Add, Sub, Mul, Div, Mod, Inc, Dec, Brak
+34: };
+35: 
+36: // opcodes
+37: enum { LEA ,IMM ,JMP ,JSR ,BZ  ,BNZ ,ENT ,ADJ ,LEV ,LI  ,LC  ,SI  ,SC  ,PSH ,
+38:        OR  ,XOR ,AND ,EQ  ,NE  ,LT  ,GT  ,LE  ,GE  ,SHL ,SHR ,ADD ,SUB ,MUL ,DIV ,MOD ,
+39:        OPEN,READ,CLOS,PRTF,MALC,FREE,MSET,MCMP,EXIT };
+40: 
+41: // types
+42: enum { CHAR, INT, PTR };
+43: 
+44: // identifier offsets (since we can't create an ident struct)
+45: enum { Tk, Hash, Name, Class, Type, Val, HClass, HType, HVal, Idsz };
+46: 
+47: void next()
+48: {
+49:   char *pp;
+50: 
+51:   while (tk = *p) {
+    ENT  1
+    IMM  40829044
+    PSH 
+    IMM  40829016
+    LI  
+    LC  
+    SI  
+    BZ   0
+52:     ++p;
+    IMM  40829016
+    PSH 
+    LI  
+    PSH 
+    IMM  1
+    ADD 
+    SI  
+53:     if (tk == '\n') {
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  10
+    EQ  
+    BZ   0
+54:       if (src) {
+    IMM  40829064
+    LI  
+    BZ   0
+55:         printf("%d: %.*s", line, p - lp, lp);
+    IMM  40829072
+    PSH 
+    IMM  40829060
+    LI  
+    PSH 
+    IMM  40829016
+    LI  
+    PSH 
+    IMM  40829020
+    LI  
+    SUB 
+    PSH 
+    IMM  40829020
+    LI  
+    PSH 
+    PRTF
+    ADJ  4
+56:         lp = p;
+    IMM  40829020
+    PSH 
+    IMM  40829016
+    LI  
+    SI  
+57:         while (le < e) {
+    IMM  40829032
+    LI  
+    PSH 
+    IMM  40829028
+    LI  
+    LT  
+    BZ   0
+58:           printf("%8.4s", &"LEA ,IMM ,JMP ,JSR ,BZ  ,BNZ ,ENT ,ADJ ,LEV ,LI  ,LC  ,SI  ,SC  ,PSH ,"
+    IMM  40829084
+    PSH 
+    IMM  40829092
+59:                            "OR  ,XOR ,AND ,EQ  ,NE  ,LT  ,GT  ,LE  ,GE  ,SHL ,SHR ,ADD ,SUB ,MUL ,DIV ,MOD ,"
+60:                            "OPEN,READ,CLOS,PRTF,MALC,FREE,MSET,MCMP,EXIT,"[*++le * 5]);
+    PSH 
+    IMM  40829032
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    LI  
+    PSH 
+    IMM  5
+    MUL 
+    ADD 
+    PSH 
+    PRTF
+    ADJ  2
+61:           if (*le <= ADJ) printf(" %d\n", *++le); else printf("\n");
+    IMM  40829032
+    LI  
+    LI  
+    PSH 
+    IMM  7
+    LE  
+    BZ   40567384
+    IMM  40829288
+    PSH 
+    IMM  40829032
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    LI  
+    PSH 
+    PRTF
+    ADJ  2
+    JMP  0
+    IMM  40829296
+    PSH 
+    PRTF
+    ADJ  1
+62:         }
+63:       }
+    JMP  40567128
+64:       ++line;
+    IMM  40829060
+    PSH 
+    LI  
+    PSH 
+    IMM  1
+    ADD 
+    SI  
+65:     }
+66:     else if (tk == '#') {
+    JMP  0
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  35
+    EQ  
+    BZ   0
+67:       while (*p != 0 && *p != '\n') ++p;
+    IMM  40829016
+    LI  
+    LC  
+    PSH 
+    IMM  0
+    NE  
+    BZ   40567568
+    IMM  40829016
+    LI  
+    LC  
+    PSH 
+    IMM  10
+    NE  
+    BZ   0
+    IMM  40829016
+    PSH 
+    LI  
+    PSH 
+    IMM  1
+    ADD 
+    SI  
+68:     }
+    JMP  40567496
+69:     else if ((tk >= 'a' && tk <= 'z') || (tk >= 'A' && tk <= 'Z') || tk == '_') {
+    JMP  0
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  97
+    GE  
+    BZ   40567692
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  122
+    LE  
+    BNZ  40567764
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  65
+    GE  
+    BZ   40567764
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  90
+    LE  
+    BNZ  40567800
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  95
+    EQ  
+    BZ   0
+70:       pp = p - 1;
+    LEA  -1
+    PSH 
+    IMM  40829016
+    LI  
+    PSH 
+    IMM  1
+    SUB 
+    SI  
+71:       while ((*p >= 'a' && *p <= 'z') || (*p >= 'A' && *p <= 'Z') || (*p >= '0' && *p <= '9') || *p == '_')
+    IMM  40829016
+    LI  
+    LC  
+    PSH 
+    IMM  97
+    GE  
+    BZ   40567924
+    IMM  40829016
+    LI  
+    LC  
+    PSH 
+    IMM  122
+    LE  
+    BNZ  40568004
+    IMM  40829016
+    LI  
+    LC  
+    PSH 
+    IMM  65
+    GE  
+    BZ   40568004
+    IMM  40829016
+    LI  
+    LC  
+    PSH 
+    IMM  90
+    LE  
+    BNZ  40568084
+    IMM  40829016
+    LI  
+    LC  
+    PSH 
+    IMM  48
+    GE  
+    BZ   40568084
+    IMM  40829016
+    LI  
+    LC  
+    PSH 
+    IMM  57
+    LE  
+    BNZ  40568124
+    IMM  40829016
+    LI  
+    LC  
+    PSH 
+    IMM  95
+    EQ  
+72:         tk = tk * 147 + *p++;
+    BZ   0
+    IMM  40829044
+    PSH 
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  147
+    MUL 
+    PSH 
+    IMM  40829016
+    PSH 
+    LI  
+    PSH 
+    IMM  1
+    ADD 
+    SI  
+    PSH 
+    IMM  1
+    SUB 
+    LC  
+    ADD 
+    SI  
+73:       tk = (tk << 6) + (p - pp);
+    JMP  40567852
+    IMM  40829044
+    PSH 
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  6
+    SHL 
+    PSH 
+    IMM  40829016
+    LI  
+    PSH 
+    LEA  -1
+    LI  
+    SUB 
+    ADD 
+    SI  
+74:       id = sym;
+    IMM  40829036
+    PSH 
+    IMM  40829040
+    LI  
+    SI  
+75:       while (id[Tk]) {
+    IMM  40829036
+    LI  
+    PSH 
+    IMM  0
+    PSH 
+    IMM  4
+    MUL 
+    ADD 
+    LI  
+    BZ   0
+76:         if (tk == id[Hash] && !memcmp((char *)id[Name], pp, p - pp)) { tk = id[Tk]; return; }
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  40829036
+    LI  
+    PSH 
+    IMM  1
+    PSH 
+    IMM  4
+    MUL 
+    ADD 
+    LI  
+    EQ  
+    BZ   40568624
+    IMM  40829036
+    LI  
+    PSH 
+    IMM  2
+    PSH 
+    IMM  4
+    MUL 
+    ADD 
+    LI  
+    PSH 
+    LEA  -1
+    LI  
+    PSH 
+    IMM  40829016
+    LI  
+    PSH 
+    LEA  -1
+    LI  
+    SUB 
+    PSH 
+    MCMP
+    ADJ  3
+    PSH 
+    IMM  0
+    EQ  
+    BZ   0
+    IMM  40829044
+    PSH 
+    IMM  40829036
+    LI  
+    PSH 
+    IMM  0
+    PSH 
+    IMM  4
+    MUL 
+    ADD 
+    LI  
+    SI  
+    LEV 
+77:         id = id + Idsz;
+    IMM  40829036
+    PSH 
+    IMM  40829036
+    LI  
+    PSH 
+    IMM  9
+    PSH 
+    IMM  4
+    MUL 
+    ADD 
+    SI  
+78:       }
+79:       id[Name] = (int)pp;
+    JMP  40568360
+    IMM  40829036
+    LI  
+    PSH 
+    IMM  2
+    PSH 
+    IMM  4
+    MUL 
+    ADD 
+    PSH 
+    LEA  -1
+    LI  
+    SI  
+80:       id[Hash] = tk;
+    IMM  40829036
+    LI  
+    PSH 
+    IMM  1
+    PSH 
+    IMM  4
+    MUL 
+    ADD 
+    PSH 
+    IMM  40829044
+    LI  
+    SI  
+81:       tk = id[Tk] = Id;
+    IMM  40829044
+    PSH 
+    IMM  40829036
+    LI  
+    PSH 
+    IMM  0
+    PSH 
+    IMM  4
+    MUL 
+    ADD 
+    PSH 
+    IMM  133
+    SI  
+    SI  
+82:       return;
+    LEV 
+83:     }
+84:     else if (tk >= '0' && tk <= '9') {
+    JMP  0
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  48
+    GE  
+    BZ   40569048
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  57
+    LE  
+    BZ   0
+85:       if (ival = tk - '0') { while (*p >= '0' && *p <= '9') ival = ival * 10 + *p++ - '0'; }
+    IMM  40829048
+    PSH 
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  48
+    SUB 
+    SI  
+    BZ   0
+    IMM  40829016
+    LI  
+    LC  
+    PSH 
+    IMM  48
+    GE  
+    BZ   40569180
+    IMM  40829016
+    LI  
+    LC  
+    PSH 
+    IMM  57
+    LE  
+    BZ   40569320
+    IMM  40829048
+    PSH 
+    IMM  40829048
+    LI  
+    PSH 
+    IMM  10
+    MUL 
+    PSH 
+    IMM  40829016
+    PSH 
+    LI  
+    PSH 
+    IMM  1
+    ADD 
+    SI  
+    PSH 
+    IMM  1
+    SUB 
+    LC  
+    ADD 
+    PSH 
+    IMM  48
+    SUB 
+    SI  
+    JMP  40569108
+86:       else if (*p == 'x' || *p == 'X') {
+    JMP  0
+    IMM  40829016
+    LI  
+    LC  
+    PSH 
+    IMM  120
+    EQ  
+    BNZ  40569400
+    IMM  40829016
+    LI  
+    LC  
+    PSH 
+    IMM  88
+    EQ  
+    BZ   0
+87:         while ((tk = *++p) && ((tk >= '0' && tk <= '9') || (tk >= 'a' && tk <= 'f') || (tk >= 'A' && tk <= 'F')))
+    IMM  40829044
+    PSH 
+    IMM  40829016
+    PSH 
+    LI  
+    PSH 
+    IMM  1
+    ADD 
+    SI  
+    LC  
+    SI  
+    BZ   40569680
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  48
+    GE  
+    BZ   40569536
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  57
+    LE  
+    BNZ  40569608
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  97
+    GE  
+    BZ   40569608
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  102
+    LE  
+    BNZ  40569680
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  65
+    GE  
+    BZ   40569680
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  70
+    LE  
+88:           ival = ival * 16 + (tk & 15) + (tk >= 'A' ? 9 : 0);
+    BZ   0
+    IMM  40829048
+    PSH 
+    IMM  40829048
+    LI  
+    PSH 
+    IMM  16
+    MUL 
+    PSH 
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  15
+    AND 
+    ADD 
+    PSH 
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  65
+    GE  
+    BZ   40569820
+    IMM  9
+    JMP  40569828
+    IMM  0
+    ADD 
+    SI  
+89:       }
+    JMP  40569408
+90:       else { while (*p >= '0' && *p <= '7') ival = ival * 8 + *p++ - '0'; }
+    JMP  0
+    IMM  40829016
+    LI  
+    LC  
+    PSH 
+    IMM  48
+    GE  
+    BZ   40569924
+    IMM  40829016
+    LI  
+    LC  
+    PSH 
+    IMM  55
+    LE  
+    BZ   40570064
+    IMM  40829048
+    PSH 
+    IMM  40829048
+    LI  
+    PSH 
+    IMM  8
+    MUL 
+    PSH 
+    IMM  40829016
+    PSH 
+    LI  
+    PSH 
+    IMM  1
+    ADD 
+    SI  
+    PSH 
+    IMM  1
+    SUB 
+    LC  
+    ADD 
+    PSH 
+    IMM  48
+    SUB 
+    SI  
+    JMP  40569852
+91:       tk = Num;
+    IMM  40829044
+    PSH 
+    IMM  128
+    SI  
+92:       return;
+    LEV 
+93:     }
+94:     else if (tk == '/') {
+    JMP  0
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  47
+    EQ  
+    BZ   0
+95:       if (*p == '/') {
+    IMM  40829016
+    LI  
+    LC  
+    PSH 
+    IMM  47
+    EQ  
+    BZ   0
+96:         ++p;
+    IMM  40829016
+    PSH 
+    LI  
+    PSH 
+    IMM  1
+    ADD 
+    SI  
+97:         while (*p != 0 && *p != '\n') ++p;
+    IMM  40829016
+    LI  
+    LC  
+    PSH 
+    IMM  0
+    NE  
+    BZ   40570284
+    IMM  40829016
+    LI  
+    LC  
+    PSH 
+    IMM  10
+    NE  
+    BZ   0
+    IMM  40829016
+    PSH 
+    LI  
+    PSH 
+    IMM  1
+    ADD 
+    SI  
+98:       }
+    JMP  40570212
+99:       else {
+    JMP  0
+100:         tk = Div;
+    IMM  40829044
+    PSH 
+    IMM  160
+    SI  
+101:         return;
+    LEV 
+102:       }
+103:     }
+104:     else if (tk == '\'' || tk == '"') {
+    JMP  0
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  39
+    EQ  
+    BNZ  40570444
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  34
+    EQ  
+    BZ   0
+105:       pp = data;
+    LEA  -1
+    PSH 
+    IMM  40829024
+    LI  
+    SI  
+106:       while (*p != 0 && *p != tk) {
+    IMM  40829016
+    LI  
+    LC  
+    PSH 
+    IMM  0
+    NE  
+    BZ   40570556
+    IMM  40829016
+    LI  
+    LC  
+    PSH 
+    IMM  40829044
+    LI  
+    NE  
+    BZ   0
+107:         if ((ival = *p++) == '\\') {
+    IMM  40829048
+    PSH 
+    IMM  40829016
+    PSH 
+    LI  
+    PSH 
+    IMM  1
+    ADD 
+    SI  
+    PSH 
+    IMM  1
+    SUB 
+    LC  
+    SI  
+    PSH 
+    IMM  92
+    EQ  
+    BZ   0
+108:           if ((ival = *p++) == 'n') ival = '\n';
+    IMM  40829048
+    PSH 
+    IMM  40829016
+    PSH 
+    LI  
+    PSH 
+    IMM  1
+    ADD 
+    SI  
+    PSH 
+    IMM  1
+    SUB 
+    LC  
+    SI  
+    PSH 
+    IMM  110
+    EQ  
+    BZ   0
+    IMM  40829048
+    PSH 
+    IMM  10
+    SI  
+109:         }
+110:         if (tk == '"') *data++ = ival;
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  34
+    EQ  
+    BZ   0
+    IMM  40829024
+    PSH 
+    LI  
+    PSH 
+    IMM  1
+    ADD 
+    SI  
+    PSH 
+    IMM  1
+    SUB 
+    PSH 
+    IMM  40829048
+    LI  
+    SC  
+111:       }
+112:       ++p;
+    JMP  40570480
+    IMM  40829016
+    PSH 
+    LI  
+    PSH 
+    IMM  1
+    ADD 
+    SI  
+113:       if (tk == '"') ival = (int)pp; else tk = Num;
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  34
+    EQ  
+    BZ   40571004
+    IMM  40829048
+    PSH 
+    LEA  -1
+    LI  
+    SI  
+    JMP  0
+    IMM  40829044
+    PSH 
+    IMM  128
+    SI  
+114:       return;
+    LEV 
+115:     }
+116:     else if (tk == '=') { if (*p == '=') { ++p; tk = Eq; } else tk = Assign; return; }
+    JMP  0
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  61
+    EQ  
+    BZ   0
+    IMM  40829016
+    LI  
+    LC  
+    PSH 
+    IMM  61
+    EQ  
+    BZ   40571184
+    IMM  40829016
+    PSH 
+    LI  
+    PSH 
+    IMM  1
+    ADD 
+    SI  
+    IMM  40829044
+    PSH 
+    IMM  149
+    SI  
+    JMP  40571208
+    IMM  40829044
+    PSH 
+    IMM  142
+    SI  
+    LEV 
+117:     else if (tk == '+') { if (*p == '+') { ++p; tk = Inc; } else tk = Add; return; }
+    JMP  0
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  43
+    EQ  
+    BZ   0
+    IMM  40829016
+    LI  
+    LC  
+    PSH 
+    IMM  43
+    EQ  
+    BZ   40571364
+    IMM  40829016
+    PSH 
+    LI  
+    PSH 
+    IMM  1
+    ADD 
+    SI  
+    IMM  40829044
+    PSH 
+    IMM  162
+    SI  
+    JMP  40571388
+    IMM  40829044
+    PSH 
+    IMM  157
+    SI  
+    LEV 
+118:     else if (tk == '-') { if (*p == '-') { ++p; tk = Dec; } else tk = Sub; return; }
+    JMP  0
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  45
+    EQ  
+    BZ   0
+    IMM  40829016
+    LI  
+    LC  
+    PSH 
+    IMM  45
+    EQ  
+    BZ   40571544
+    IMM  40829016
+    PSH 
+    LI  
+    PSH 
+    IMM  1
+    ADD 
+    SI  
+    IMM  40829044
+    PSH 
+    IMM  163
+    SI  
+    JMP  40571568
+    IMM  40829044
+    PSH 
+    IMM  158
+    SI  
+    LEV 
+119:     else if (tk == '!') { if (*p == '=') { ++p; tk = Ne; } return; }
+    JMP  0
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  33
+    EQ  
+    BZ   0
+    IMM  40829016
+    LI  
+    LC  
+    PSH 
+    IMM  61
+    EQ  
+    BZ   40571716
+    IMM  40829016
+    PSH 
+    LI  
+    PSH 
+    IMM  1
+    ADD 
+    SI  
+    IMM  40829044
+    PSH 
+    IMM  150
+    SI  
+    LEV 
+120:     else if (tk == '<') { if (*p == '=') { ++p; tk = Le; } else if (*p == '<') { ++p; tk = Shl; } else tk = Lt; return; }
+    JMP  0
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  60
+    EQ  
+    BZ   0
+    IMM  40829016
+    LI  
+    LC  
+    PSH 
+    IMM  61
+    EQ  
+    BZ   40571872
+    IMM  40829016
+    PSH 
+    LI  
+    PSH 
+    IMM  1
+    ADD 
+    SI  
+    IMM  40829044
+    PSH 
+    IMM  153
+    SI  
+    JMP  40572004
+    IMM  40829016
+    LI  
+    LC  
+    PSH 
+    IMM  60
+    EQ  
+    BZ   40571980
+    IMM  40829016
+    PSH 
+    LI  
+    PSH 
+    IMM  1
+    ADD 
+    SI  
+    IMM  40829044
+    PSH 
+    IMM  155
+    SI  
+    JMP  40572004
+    IMM  40829044
+    PSH 
+    IMM  151
+    SI  
+    LEV 
+121:     else if (tk == '>') { if (*p == '=') { ++p; tk = Ge; } else if (*p == '>') { ++p; tk = Shr; } else tk = Gt; return; }
+    JMP  0
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  62
+    EQ  
+    BZ   0
+    IMM  40829016
+    LI  
+    LC  
+    PSH 
+    IMM  61
+    EQ  
+    BZ   40572160
+    IMM  40829016
+    PSH 
+    LI  
+    PSH 
+    IMM  1
+    ADD 
+    SI  
+    IMM  40829044
+    PSH 
+    IMM  154
+    SI  
+    JMP  40572292
+    IMM  40829016
+    LI  
+    LC  
+    PSH 
+    IMM  62
+    EQ  
+    BZ   40572268
+    IMM  40829016
+    PSH 
+    LI  
+    PSH 
+    IMM  1
+    ADD 
+    SI  
+    IMM  40829044
+    PSH 
+    IMM  156
+    SI  
+    JMP  40572292
+    IMM  40829044
+    PSH 
+    IMM  152
+    SI  
+    LEV 
+122:     else if (tk == '|') { if (*p == '|') { ++p; tk = Lor; } else tk = Or; return; }
+    JMP  0
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  124
+    EQ  
+    BZ   0
+    IMM  40829016
+    LI  
+    LC  
+    PSH 
+    IMM  124
+    EQ  
+    BZ   40572448
+    IMM  40829016
+    PSH 
+    LI  
+    PSH 
+    IMM  1
+    ADD 
+    SI  
+    IMM  40829044
+    PSH 
+    IMM  144
+    SI  
+    JMP  40572472
+    IMM  40829044
+    PSH 
+    IMM  146
+    SI  
+    LEV 
+123:     else if (tk == '&') { if (*p == '&') { ++p; tk = Lan; } else tk = And; return; }
+    JMP  0
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  38
+    EQ  
+    BZ   0
+    IMM  40829016
+    LI  
+    LC  
+    PSH 
+    IMM  38
+    EQ  
+    BZ   40572628
+    IMM  40829016
+    PSH 
+    LI  
+    PSH 
+    IMM  1
+    ADD 
+    SI  
+    IMM  40829044
+    PSH 
+    IMM  145
+    SI  
+    JMP  40572652
+    IMM  40829044
+    PSH 
+    IMM  148
+    SI  
+    LEV 
+124:     else if (tk == '^') { tk = Xor; return; }
+    JMP  0
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  94
+    EQ  
+    BZ   0
+    IMM  40829044
+    PSH 
+    IMM  147
+    SI  
+    LEV 
+125:     else if (tk == '%') { tk = Mod; return; }
+    JMP  0
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  37
+    EQ  
+    BZ   0
+    IMM  40829044
+    PSH 
+    IMM  161
+    SI  
+    LEV 
+126:     else if (tk == '*') { tk = Mul; return; }
+    JMP  0
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  42
+    EQ  
+    BZ   0
+    IMM  40829044
+    PSH 
+    IMM  159
+    SI  
+    LEV 
+127:     else if (tk == '[') { tk = Brak; return; }
+    JMP  0
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  91
+    EQ  
+    BZ   0
+    IMM  40829044
+    PSH 
+    IMM  164
+    SI  
+    LEV 
+128:     else if (tk == '?') { tk = Cond; return; }
+    JMP  0
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  63
+    EQ  
+    BZ   0
+    IMM  40829044
+    PSH 
+    IMM  143
+    SI  
+    LEV 
+129:     else if (tk == '~' || tk == ';' || tk == '{' || tk == '}' || tk == '(' || tk == ')' || tk == ']' || tk == ',' || tk == ':') return;
+    JMP  0
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  126
+    EQ  
+    BNZ  40573088
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  59
+    EQ  
+    BNZ  40573124
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  123
+    EQ  
+    BNZ  40573160
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  125
+    EQ  
+    BNZ  40573196
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  40
+    EQ  
+    BNZ  40573232
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  41
+    EQ  
+    BNZ  40573268
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  93
+    EQ  
+    BNZ  40573304
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  44
+    EQ  
+    BNZ  40573340
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  58
+    EQ  
+    BZ   0
+    LEV 
+130:   }
+131: }
+    JMP  40566876
+    LEV 
+132: 
+133: void expr(int lev)
+134: {
+135:   int t, *d;
+136: 
+137:   if (!tk) { printf("%d: unexpected eof in expression\n", line); exit(-1); }
+    ENT  2
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  0
+    EQ  
+    BZ   0
+    IMM  40829300
+    PSH 
+    IMM  40829060
+    LI  
+    PSH 
+    PRTF
+    ADJ  2
+    IMM  -1
+    PSH 
+    EXIT
+    ADJ  1
+138:   else if (tk == Num) { *++e = IMM; *++e = ival; next(); ty = INT; }
+    JMP  0
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  128
+    EQ  
+    BZ   0
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  1
+    SI  
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  40829048
+    LI  
+    SI  
+    JSR  40566868
+    IMM  40829052
+    PSH 
+    IMM  1
+    SI  
+139:   else if (tk == '"') {
+    JMP  0
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  34
+    EQ  
+    BZ   0
+140:     *++e = IMM; *++e = ival; next();
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  1
+    SI  
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  40829048
+    LI  
+    SI  
+    JSR  40566868
+141:     while (tk == '"') next();
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  34
+    EQ  
+    BZ   0
+    JSR  40566868
+142:     data = (char *)((int)data + sizeof(int) & -sizeof(int)); ty = PTR;
+    JMP  40573816
+    IMM  40829024
+    PSH 
+    IMM  40829024
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    PSH 
+    IMM  -1
+    PSH 
+    IMM  4
+    MUL 
+    AND 
+    SI  
+    IMM  40829052
+    PSH 
+    IMM  2
+    SI  
+143:   }
+144:   else if (tk == Sizeof) {
+    JMP  0
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  140
+    EQ  
+    BZ   0
+145:     next(); if (tk == '(') next(); else { printf("%d: open paren expected in sizeof\n", line); exit(-1); }
+    JSR  40566868
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  40
+    EQ  
+    BZ   40574072
+    JSR  40566868
+    JMP  0
+    IMM  40829336
+    PSH 
+    IMM  40829060
+    LI  
+    PSH 
+    PRTF
+    ADJ  2
+    IMM  -1
+    PSH 
+    EXIT
+    ADJ  1
+146:     ty = INT; if (tk == Int) next(); else if (tk == Char) { next(); ty = CHAR; }
+    IMM  40829052
+    PSH 
+    IMM  1
+    SI  
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  138
+    EQ  
+    BZ   40574212
+    JSR  40566868
+    JMP  0
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  134
+    EQ  
+    BZ   0
+    JSR  40566868
+    IMM  40829052
+    PSH 
+    IMM  0
+    SI  
+147:     while (tk == Mul) { next(); ty = ty + PTR; }
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  159
+    EQ  
+    BZ   0
+    JSR  40566868
+    IMM  40829052
+    PSH 
+    IMM  40829052
+    LI  
+    PSH 
+    IMM  2
+    ADD 
+    SI  
+148:     if (tk == ')') next(); else { printf("%d: close paren expected in sizeof\n", line); exit(-1); }
+    JMP  40574280
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  41
+    EQ  
+    BZ   40574428
+    JSR  40566868
+    JMP  0
+    IMM  40829372
+    PSH 
+    IMM  40829060
+    LI  
+    PSH 
+    PRTF
+    ADJ  2
+    IMM  -1
+    PSH 
+    EXIT
+    ADJ  1
+149:     *++e = IMM; *++e = (ty == CHAR) ? sizeof(char) : sizeof(int);
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  1
+    SI  
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  40829052
+    LI  
+    PSH 
+    IMM  0
+    EQ  
+    BZ   40574636
+    IMM  1
+    JMP  40574644
+    IMM  4
+    SI  
+150:     ty = INT;
+    IMM  40829052
+    PSH 
+    IMM  1
+    SI  
+151:   }
+152:   else if (tk == Id) {
+    JMP  0
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  133
+    EQ  
+    BZ   0
+153:     d = id; next();
+    LEA  -2
+    PSH 
+    IMM  40829036
+    LI  
+    SI  
+    JSR  40566868
+154:     if (tk == '(') {
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  40
+    EQ  
+    BZ   0
+155:       next();
+    JSR  40566868
+156:       t = 0;
+    LEA  -1
+    PSH 
+    IMM  0
+    SI  
+157:       while (tk != ')') { expr(Assign); *++e = PSH; ++t; if (tk == ',') next(); }
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  41
+    NE  
+    BZ   0
+    IMM  142
+    PSH 
+    JSR  40573364
+    ADJ  1
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  13
+    SI  
+    LEA  -1
+    PSH 
+    LI  
+    PSH 
+    IMM  1
+    ADD 
+    SI  
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  44
+    EQ  
+    BZ   40575016
+    JSR  40566868
+158:       next();
+    JMP  40574820
+    JSR  40566868
+159:       if (d[Class] == Sys) *++e = d[Val];
+    LEA  -2
+    LI  
+    PSH 
+    IMM  3
+    PSH 
+    IMM  4
+    MUL 
+    ADD 
+    LI  
+    PSH 
+    IMM  130
+    EQ  
+    BZ   0
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    LEA  -2
+    LI  
+    PSH 
+    IMM  5
+    PSH 
+    IMM  4
+    MUL 
+    ADD 
+    LI  
+    SI  
+160:       else if (d[Class] == Fun) { *++e = JSR; *++e = d[Val]; }
+    JMP  0
+    LEA  -2
+    LI  
+    PSH 
+    IMM  3
+    PSH 
+    IMM  4
+    MUL 
+    ADD 
+    LI  
+    PSH 
+    IMM  129
+    EQ  
+    BZ   0
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  3
+    SI  
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    LEA  -2
+    LI  
+    PSH 
+    IMM  5
+    PSH 
+    IMM  4
+    MUL 
+    ADD 
+    LI  
+    SI  
+161:       else { printf("%d: bad function call\n", line); exit(-1); }
+    JMP  0
+    IMM  40829408
+    PSH 
+    IMM  40829060
+    LI  
+    PSH 
+    PRTF
+    ADJ  2
+    IMM  -1
+    PSH 
+    EXIT
+    ADJ  1
+162:       if (t) { *++e = ADJ; *++e = t; }
+    LEA  -1
+    LI  
+    BZ   0
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  7
+    SI  
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    LEA  -1
+    LI  
+    SI  
+163:       ty = d[Type];
+    IMM  40829052
+    PSH 
+    LEA  -2
+    LI  
+    PSH 
+    IMM  4
+    PSH 
+    IMM  4
+    MUL 
+    ADD 
+    LI  
+    SI  
+164:     }
+165:     else if (d[Class] == Num) { *++e = IMM; *++e = d[Val]; ty = INT; }
+    JMP  0
+    LEA  -2
+    LI  
+    PSH 
+    IMM  3
+    PSH 
+    IMM  4
+    MUL 
+    ADD 
+    LI  
+    PSH 
+    IMM  128
+    EQ  
+    BZ   0
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  1
+    SI  
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    LEA  -2
+    LI  
+    PSH 
+    IMM  5
+    PSH 
+    IMM  4
+    MUL 
+    ADD 
+    LI  
+    SI  
+    IMM  40829052
+    PSH 
+    IMM  1
+    SI  
+166:     else {
+    JMP  0
+167:       if (d[Class] == Loc) { *++e = LEA; *++e = loc - d[Val]; }
+    LEA  -2
+    LI  
+    PSH 
+    IMM  3
+    PSH 
+    IMM  4
+    MUL 
+    ADD 
+    LI  
+    PSH 
+    IMM  132
+    EQ  
+    BZ   0
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  0
+    SI  
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  40829056
+    LI  
+    PSH 
+    LEA  -2
+    LI  
+    PSH 
+    IMM  5
+    PSH 
+    IMM  4
+    MUL 
+    ADD 
+    LI  
+    SUB 
+    SI  
+168:       else if (d[Class] == Glo) { *++e = IMM; *++e = d[Val]; }
+    JMP  0
+    LEA  -2
+    LI  
+    PSH 
+    IMM  3
+    PSH 
+    IMM  4
+    MUL 
+    ADD 
+    LI  
+    PSH 
+    IMM  131
+    EQ  
+    BZ   0
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  1
+    SI  
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    LEA  -2
+    LI  
+    PSH 
+    IMM  5
+    PSH 
+    IMM  4
+    MUL 
+    ADD 
+    LI  
+    SI  
+169:       else { printf("%d: undefined variable\n", line); exit(-1); }
+    JMP  0
+    IMM  40829432
+    PSH 
+    IMM  40829060
+    LI  
+    PSH 
+    PRTF
+    ADJ  2
+    IMM  -1
+    PSH 
+    EXIT
+    ADJ  1
+170:       *++e = ((ty = d[Type]) == CHAR) ? LC : LI;
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  40829052
+    PSH 
+    LEA  -2
+    LI  
+    PSH 
+    IMM  4
+    PSH 
+    IMM  4
+    MUL 
+    ADD 
+    LI  
+    SI  
+    PSH 
+    IMM  0
+    EQ  
+    BZ   40576616
+    IMM  10
+    JMP  40576624
+    IMM  9
+    SI  
+171:     }
+172:   }
+173:   else if (tk == '(') {
+    JMP  0
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  40
+    EQ  
+    BZ   0
+174:     next();
+    JSR  40566868
+175:     if (tk == Int || tk == Char) {
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  138
+    EQ  
+    BNZ  40576744
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  134
+    EQ  
+    BZ   0
+176:       t = (tk == Int) ? INT : CHAR; next();
+    LEA  -1
+    PSH 
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  138
+    EQ  
+    BZ   40576816
+    IMM  1
+    JMP  40576824
+    IMM  0
+    SI  
+    JSR  40566868
+177:       while (tk == Mul) { next(); t = t + PTR; }
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  159
+    EQ  
+    BZ   0
+    JSR  40566868
+    LEA  -1
+    PSH 
+    LEA  -1
+    LI  
+    PSH 
+    IMM  2
+    ADD 
+    SI  
+178:       if (tk == ')') next(); else { printf("%d: bad cast\n", line); exit(-1); }
+    JMP  40576836
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  41
+    EQ  
+    BZ   40576984
+    JSR  40566868
+    JMP  0
+    IMM  40829456
+    PSH 
+    IMM  40829060
+    LI  
+    PSH 
+    PRTF
+    ADJ  2
+    IMM  -1
+    PSH 
+    EXIT
+    ADJ  1
+179:       expr(Inc);
+    IMM  162
+    PSH 
+    JSR  40573364
+    ADJ  1
+180:       ty = t;
+    IMM  40829052
+    PSH 
+    LEA  -1
+    LI  
+    SI  
+181:     }
+182:     else {
+    JMP  0
+183:       expr(Assign);
+    IMM  142
+    PSH 
+    JSR  40573364
+    ADJ  1
+184:       if (tk == ')') next(); else { printf("%d: close paren expected\n", line); exit(-1); }
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  41
+    EQ  
+    BZ   40577192
+    JSR  40566868
+    JMP  0
+    IMM  40829472
+    PSH 
+    IMM  40829060
+    LI  
+    PSH 
+    PRTF
+    ADJ  2
+    IMM  -1
+    PSH 
+    EXIT
+    ADJ  1
+185:     }
+186:   }
+187:   else if (tk == Mul) {
+    JMP  0
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  159
+    EQ  
+    BZ   0
+188:     next(); expr(Inc);
+    JSR  40566868
+    IMM  162
+    PSH 
+    JSR  40573364
+    ADJ  1
+189:     if (ty > INT) ty = ty - PTR; else { printf("%d: bad dereference\n", line); exit(-1); }
+    IMM  40829052
+    LI  
+    PSH 
+    IMM  1
+    GT  
+    BZ   40577424
+    IMM  40829052
+    PSH 
+    IMM  40829052
+    LI  
+    PSH 
+    IMM  2
+    SUB 
+    SI  
+    JMP  0
+    IMM  40829500
+    PSH 
+    IMM  40829060
+    LI  
+    PSH 
+    PRTF
+    ADJ  2
+    IMM  -1
+    PSH 
+    EXIT
+    ADJ  1
+190:     *++e = (ty == CHAR) ? LC : LI;
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  40829052
+    LI  
+    PSH 
+    IMM  0
+    EQ  
+    BZ   40577580
+    IMM  10
+    JMP  40577588
+    IMM  9
+    SI  
+191:   }
+192:   else if (tk == And) {
+    JMP  0
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  148
+    EQ  
+    BZ   0
+193:     next(); expr(Inc);
+    JSR  40566868
+    IMM  162
+    PSH 
+    JSR  40573364
+    ADJ  1
+194:     if (*e == LC || *e == LI) --e; else { printf("%d: bad address-of\n", line); exit(-1); }
+    IMM  40829028
+    LI  
+    LI  
+    PSH 
+    IMM  10
+    EQ  
+    BNZ  40577744
+    IMM  40829028
+    LI  
+    LI  
+    PSH 
+    IMM  9
+    EQ  
+    BZ   40577796
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    SUB 
+    SI  
+    JMP  0
+    IMM  40829524
+    PSH 
+    IMM  40829060
+    LI  
+    PSH 
+    PRTF
+    ADJ  2
+    IMM  -1
+    PSH 
+    EXIT
+    ADJ  1
+195:     ty = ty + PTR;
+    IMM  40829052
+    PSH 
+    IMM  40829052
+    LI  
+    PSH 
+    IMM  2
+    ADD 
+    SI  
+196:   }
+197:   else if (tk == '!') { next(); expr(Inc); *++e = PSH; *++e = IMM; *++e = 0; *++e = EQ; ty = INT; }
+    JMP  0
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  33
+    EQ  
+    BZ   0
+    JSR  40566868
+    IMM  162
+    PSH 
+    JSR  40573364
+    ADJ  1
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  13
+    SI  
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  1
+    SI  
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  0
+    SI  
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  17
+    SI  
+    IMM  40829052
+    PSH 
+    IMM  1
+    SI  
+198:   else if (tk == '~') { next(); expr(Inc); *++e = PSH; *++e = IMM; *++e = -1; *++e = XOR; ty = INT; }
+    JMP  0
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  126
+    EQ  
+    BZ   0
+    JSR  40566868
+    IMM  162
+    PSH 
+    JSR  40573364
+    ADJ  1
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  13
+    SI  
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  1
+    SI  
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  -1
+    SI  
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  15
+    SI  
+    IMM  40829052
+    PSH 
+    IMM  1
+    SI  
+199:   else if (tk == Add) { next(); expr(Inc); ty = INT; }
+    JMP  0
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  157
+    EQ  
+    BZ   0
+    JSR  40566868
+    IMM  162
+    PSH 
+    JSR  40573364
+    ADJ  1
+    IMM  40829052
+    PSH 
+    IMM  1
+    SI  
+200:   else if (tk == Sub) {
+    JMP  0
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  158
+    EQ  
+    BZ   0
+201:     next(); *++e = IMM;
+    JSR  40566868
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  1
+    SI  
+202:     if (tk == Num) { *++e = -ival; next(); } else { *++e = -1; *++e = PSH; expr(Inc); *++e = MUL; }
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  128
+    EQ  
+    BZ   40578860
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  -1
+    PSH 
+    IMM  40829048
+    LI  
+    MUL 
+    SI  
+    JSR  40566868
+    JMP  0
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  -1
+    SI  
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  13
+    SI  
+    IMM  162
+    PSH 
+    JSR  40573364
+    ADJ  1
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  27
+    SI  
+203:     ty = INT;
+    IMM  40829052
+    PSH 
+    IMM  1
+    SI  
+204:   }
+205:   else if (tk == Inc || tk == Dec) {
+    JMP  0
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  162
+    EQ  
+    BNZ  40579140
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  163
+    EQ  
+    BZ   0
+206:     t = tk; next(); expr(Inc);
+    LEA  -1
+    PSH 
+    IMM  40829044
+    LI  
+    SI  
+    JSR  40566868
+    IMM  162
+    PSH 
+    JSR  40573364
+    ADJ  1
+207:     if (*e == LC) { *e = PSH; *++e = LC; }
+    IMM  40829028
+    LI  
+    LI  
+    PSH 
+    IMM  10
+    EQ  
+    BZ   0
+    IMM  40829028
+    LI  
+    PSH 
+    IMM  13
+    SI  
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  10
+    SI  
+208:     else if (*e == LI) { *e = PSH; *++e = LI; }
+    JMP  0
+    IMM  40829028
+    LI  
+    LI  
+    PSH 
+    IMM  9
+    EQ  
+    BZ   0
+    IMM  40829028
+    LI  
+    PSH 
+    IMM  13
+    SI  
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  9
+    SI  
+209:     else { printf("%d: bad lvalue in pre-increment\n", line); exit(-1); }
+    JMP  0
+    IMM  40829544
+    PSH 
+    IMM  40829060
+    LI  
+    PSH 
+    PRTF
+    ADJ  2
+    IMM  -1
+    PSH 
+    EXIT
+    ADJ  1
+210:     *++e = PSH;
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  13
+    SI  
+211:     *++e = IMM; *++e = (ty > PTR) ? sizeof(int) : sizeof(char);
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  1
+    SI  
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  40829052
+    LI  
+    PSH 
+    IMM  2
+    GT  
+    BZ   40579728
+    IMM  4
+    JMP  40579736
+    IMM  1
+    SI  
+212:     *++e = (t == Inc) ? ADD : SUB;
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    LEA  -1
+    LI  
+    PSH 
+    IMM  162
+    EQ  
+    BZ   40579832
+    IMM  25
+    JMP  40579840
+    IMM  26
+    SI  
+213:     *++e = (ty == CHAR) ? SC : SI;
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  40829052
+    LI  
+    PSH 
+    IMM  0
+    EQ  
+    BZ   40579936
+    IMM  12
+    JMP  40579944
+    IMM  11
+    SI  
+214:   }
+215:   else { printf("%d: bad expression\n", line); exit(-1); }
+    JMP  0
+    IMM  40829580
+    PSH 
+    IMM  40829060
+    LI  
+    PSH 
+    PRTF
+    ADJ  2
+    IMM  -1
+    PSH 
+    EXIT
+    ADJ  1
+216: 
+217:   while (tk >= lev) { // "precedence climbing" or "Top Down Operator Precedence" method
+    IMM  40829044
+    LI  
+    PSH 
+    LEA  2
+    LI  
+    GE  
+    BZ   0
+218:     t = ty;
+    LEA  -1
+    PSH 
+    IMM  40829052
+    LI  
+    SI  
+219:     if (tk == Assign) {
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  142
+    EQ  
+    BZ   0
+220:       next();
+    JSR  40566868
+221:       if (*e == LC || *e == LI) *e = PSH; else { printf("%d: bad lvalue in assignment\n", line); exit(-1); }
+    IMM  40829028
+    LI  
+    LI  
+    PSH 
+    IMM  10
+    EQ  
+    BNZ  40580204
+    IMM  40829028
+    LI  
+    LI  
+    PSH 
+    IMM  9
+    EQ  
+    BZ   40580248
+    IMM  40829028
+    LI  
+    PSH 
+    IMM  13
+    SI  
+    JMP  0
+    IMM  40829600
+    PSH 
+    IMM  40829060
+    LI  
+    PSH 
+    PRTF
+    ADJ  2
+    IMM  -1
+    PSH 
+    EXIT
+    ADJ  1
+222:       expr(Assign); *++e = ((ty = t) == CHAR) ? SC : SI;
+    IMM  142
+    PSH 
+    JSR  40573364
+    ADJ  1
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  40829052
+    PSH 
+    LEA  -1
+    LI  
+    SI  
+    PSH 
+    IMM  0
+    EQ  
+    BZ   40580448
+    IMM  12
+    JMP  40580456
+    IMM  11
+    SI  
+223:     }
+224:     else if (tk == Cond) {
+    JMP  0
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  143
+    EQ  
+    BZ   0
+225:       next();
+    JSR  40566868
+226:       *++e = BZ; d = ++e;
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  4
+    SI  
+    LEA  -2
+    PSH 
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    SI  
+227:       expr(Assign);
+    IMM  142
+    PSH 
+    JSR  40573364
+    ADJ  1
+228:       if (tk == ':') next(); else { printf("%d: conditional missing colon\n", line); exit(-1); }
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  58
+    EQ  
+    BZ   40580696
+    JSR  40566868
+    JMP  0
+    IMM  40829632
+    PSH 
+    IMM  40829060
+    LI  
+    PSH 
+    PRTF
+    ADJ  2
+    IMM  -1
+    PSH 
+    EXIT
+    ADJ  1
+229:       *d = (int)(e + 3); *++e = JMP; d = ++e;
+    LEA  -2
+    LI  
+    PSH 
+    IMM  40829028
+    LI  
+    PSH 
+    IMM  3
+    PSH 
+    IMM  4
+    MUL 
+    ADD 
+    SI  
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  2
+    SI  
+    LEA  -2
+    PSH 
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    SI  
+230:       expr(Cond);
+    IMM  143
+    PSH 
+    JSR  40573364
+    ADJ  1
+231:       *d = (int)(e + 1);
+    LEA  -2
+    LI  
+    PSH 
+    IMM  40829028
+    LI  
+    PSH 
+    IMM  1
+    PSH 
+    IMM  4
+    MUL 
+    ADD 
+    SI  
+232:     }
+233:     else if (tk == Lor) { next(); *++e = BNZ; d = ++e; expr(Lan); *d = (int)(e + 1); ty = INT; }
+    JMP  0
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  144
+    EQ  
+    BZ   0
+    JSR  40566868
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  5
+    SI  
+    LEA  -2
+    PSH 
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    SI  
+    IMM  145
+    PSH 
+    JSR  40573364
+    ADJ  1
+    LEA  -2
+    LI  
+    PSH 
+    IMM  40829028
+    LI  
+    PSH 
+    IMM  1
+    PSH 
+    IMM  4
+    MUL 
+    ADD 
+    SI  
+    IMM  40829052
+    PSH 
+    IMM  1
+    SI  
+234:     else if (tk == Lan) { next(); *++e = BZ;  d = ++e; expr(Or);  *d = (int)(e + 1); ty = INT; }
+    JMP  0
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  145
+    EQ  
+    BZ   0
+    JSR  40566868
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  4
+    SI  
+    LEA  -2
+    PSH 
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    SI  
+    IMM  146
+    PSH 
+    JSR  40573364
+    ADJ  1
+    LEA  -2
+    LI  
+    PSH 
+    IMM  40829028
+    LI  
+    PSH 
+    IMM  1
+    PSH 
+    IMM  4
+    MUL 
+    ADD 
+    SI  
+    IMM  40829052
+    PSH 
+    IMM  1
+    SI  
+235:     else if (tk == Or)  { next(); *++e = PSH; expr(Xor); *++e = OR;  ty = INT; }
+    JMP  0
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  146
+    EQ  
+    BZ   0
+    JSR  40566868
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  13
+    SI  
+    IMM  147
+    PSH 
+    JSR  40573364
+    ADJ  1
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  14
+    SI  
+    IMM  40829052
+    PSH 
+    IMM  1
+    SI  
+236:     else if (tk == Xor) { next(); *++e = PSH; expr(And); *++e = XOR; ty = INT; }
+    JMP  0
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  147
+    EQ  
+    BZ   0
+    JSR  40566868
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  13
+    SI  
+    IMM  148
+    PSH 
+    JSR  40573364
+    ADJ  1
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  15
+    SI  
+    IMM  40829052
+    PSH 
+    IMM  1
+    SI  
+237:     else if (tk == And) { next(); *++e = PSH; expr(Eq);  *++e = AND; ty = INT; }
+    JMP  0
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  148
+    EQ  
+    BZ   0
+    JSR  40566868
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  13
+    SI  
+    IMM  149
+    PSH 
+    JSR  40573364
+    ADJ  1
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  16
+    SI  
+    IMM  40829052
+    PSH 
+    IMM  1
+    SI  
+238:     else if (tk == Eq)  { next(); *++e = PSH; expr(Lt);  *++e = EQ;  ty = INT; }
+    JMP  0
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  149
+    EQ  
+    BZ   0
+    JSR  40566868
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  13
+    SI  
+    IMM  151
+    PSH 
+    JSR  40573364
+    ADJ  1
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  17
+    SI  
+    IMM  40829052
+    PSH 
+    IMM  1
+    SI  
+239:     else if (tk == Ne)  { next(); *++e = PSH; expr(Lt);  *++e = NE;  ty = INT; }
+    JMP  0
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  150
+    EQ  
+    BZ   0
+    JSR  40566868
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  13
+    SI  
+    IMM  151
+    PSH 
+    JSR  40573364
+    ADJ  1
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  18
+    SI  
+    IMM  40829052
+    PSH 
+    IMM  1
+    SI  
+240:     else if (tk == Lt)  { next(); *++e = PSH; expr(Shl); *++e = LT;  ty = INT; }
+    JMP  0
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  151
+    EQ  
+    BZ   0
+    JSR  40566868
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  13
+    SI  
+    IMM  155
+    PSH 
+    JSR  40573364
+    ADJ  1
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  19
+    SI  
+    IMM  40829052
+    PSH 
+    IMM  1
+    SI  
+241:     else if (tk == Gt)  { next(); *++e = PSH; expr(Shl); *++e = GT;  ty = INT; }
+    JMP  0
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  152
+    EQ  
+    BZ   0
+    JSR  40566868
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  13
+    SI  
+    IMM  155
+    PSH 
+    JSR  40573364
+    ADJ  1
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  20
+    SI  
+    IMM  40829052
+    PSH 
+    IMM  1
+    SI  
+242:     else if (tk == Le)  { next(); *++e = PSH; expr(Shl); *++e = LE;  ty = INT; }
+    JMP  0
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  153
+    EQ  
+    BZ   0
+    JSR  40566868
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  13
+    SI  
+    IMM  155
+    PSH 
+    JSR  40573364
+    ADJ  1
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  21
+    SI  
+    IMM  40829052
+    PSH 
+    IMM  1
+    SI  
+243:     else if (tk == Ge)  { next(); *++e = PSH; expr(Shl); *++e = GE;  ty = INT; }
+    JMP  0
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  154
+    EQ  
+    BZ   0
+    JSR  40566868
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  13
+    SI  
+    IMM  155
+    PSH 
+    JSR  40573364
+    ADJ  1
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  22
+    SI  
+    IMM  40829052
+    PSH 
+    IMM  1
+    SI  
+244:     else if (tk == Shl) { next(); *++e = PSH; expr(Add); *++e = SHL; ty = INT; }
+    JMP  0
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  155
+    EQ  
+    BZ   0
+    JSR  40566868
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  13
+    SI  
+    IMM  157
+    PSH 
+    JSR  40573364
+    ADJ  1
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  23
+    SI  
+    IMM  40829052
+    PSH 
+    IMM  1
+    SI  
+245:     else if (tk == Shr) { next(); *++e = PSH; expr(Add); *++e = SHR; ty = INT; }
+    JMP  0
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  156
+    EQ  
+    BZ   0
+    JSR  40566868
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  13
+    SI  
+    IMM  157
+    PSH 
+    JSR  40573364
+    ADJ  1
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  24
+    SI  
+    IMM  40829052
+    PSH 
+    IMM  1
+    SI  
+246:     else if (tk == Add) {
+    JMP  0
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  157
+    EQ  
+    BZ   0
+247:       next(); *++e = PSH; expr(Mul);
+    JSR  40566868
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  13
+    SI  
+    IMM  159
+    PSH 
+    JSR  40573364
+    ADJ  1
+248:       if ((ty = t) > PTR) { *++e = PSH; *++e = IMM; *++e = sizeof(int); *++e = MUL;  }
+    IMM  40829052
+    PSH 
+    LEA  -1
+    LI  
+    SI  
+    PSH 
+    IMM  2
+    GT  
+    BZ   0
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  13
+    SI  
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  1
+    SI  
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  4
+    SI  
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  27
+    SI  
+249:       *++e = ADD;
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  25
+    SI  
+250:     }
+251:     else if (tk == Sub) {
+    JMP  0
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  158
+    EQ  
+    BZ   0
+252:       next(); *++e = PSH; expr(Mul);
+    JSR  40566868
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  13
+    SI  
+    IMM  159
+    PSH 
+    JSR  40573364
+    ADJ  1
+253:       if (t > PTR && t == ty) { *++e = SUB; *++e = PSH; *++e = IMM; *++e = sizeof(int); *++e = DIV; ty = INT; }
+    LEA  -1
+    LI  
+    PSH 
+    IMM  2
+    GT  
+    BZ   40584496
+    LEA  -1
+    LI  
+    PSH 
+    IMM  40829052
+    LI  
+    EQ  
+    BZ   0
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  26
+    SI  
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  13
+    SI  
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  1
+    SI  
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  4
+    SI  
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  28
+    SI  
+    IMM  40829052
+    PSH 
+    IMM  1
+    SI  
+254:       else if ((ty = t) > PTR) { *++e = PSH; *++e = IMM; *++e = sizeof(int); *++e = MUL; *++e = SUB; }
+    JMP  0
+    IMM  40829052
+    PSH 
+    LEA  -1
+    LI  
+    SI  
+    PSH 
+    IMM  2
+    GT  
+    BZ   0
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  13
+    SI  
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  1
+    SI  
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  4
+    SI  
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  27
+    SI  
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  26
+    SI  
+255:       else *++e = SUB;
+    JMP  0
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  26
+    SI  
+256:     }
+257:     else if (tk == Mul) { next(); *++e = PSH; expr(Inc); *++e = MUL; ty = INT; }
+    JMP  0
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  159
+    EQ  
+    BZ   0
+    JSR  40566868
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  13
+    SI  
+    IMM  162
+    PSH 
+    JSR  40573364
+    ADJ  1
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  27
+    SI  
+    IMM  40829052
+    PSH 
+    IMM  1
+    SI  
+258:     else if (tk == Div) { next(); *++e = PSH; expr(Inc); *++e = DIV; ty = INT; }
+    JMP  0
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  160
+    EQ  
+    BZ   0
+    JSR  40566868
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  13
+    SI  
+    IMM  162
+    PSH 
+    JSR  40573364
+    ADJ  1
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  28
+    SI  
+    IMM  40829052
+    PSH 
+    IMM  1
+    SI  
+259:     else if (tk == Mod) { next(); *++e = PSH; expr(Inc); *++e = MOD; ty = INT; }
+    JMP  0
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  161
+    EQ  
+    BZ   0
+    JSR  40566868
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  13
+    SI  
+    IMM  162
+    PSH 
+    JSR  40573364
+    ADJ  1
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  29
+    SI  
+    IMM  40829052
+    PSH 
+    IMM  1
+    SI  
+260:     else if (tk == Inc || tk == Dec) {
+    JMP  0
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  162
+    EQ  
+    BNZ  40585864
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  163
+    EQ  
+    BZ   0
+261:       if (*e == LC) { *e = PSH; *++e = LC; }
+    IMM  40829028
+    LI  
+    LI  
+    PSH 
+    IMM  10
+    EQ  
+    BZ   0
+    IMM  40829028
+    LI  
+    PSH 
+    IMM  13
+    SI  
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  10
+    SI  
+262:       else if (*e == LI) { *e = PSH; *++e = LI; }
+    JMP  0
+    IMM  40829028
+    LI  
+    LI  
+    PSH 
+    IMM  9
+    EQ  
+    BZ   0
+    IMM  40829028
+    LI  
+    PSH 
+    IMM  13
+    SI  
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  9
+    SI  
+263:       else { printf("%d: bad lvalue in post-increment\n", line); exit(-1); }
+    JMP  0
+    IMM  40829664
+    PSH 
+    IMM  40829060
+    LI  
+    PSH 
+    PRTF
+    ADJ  2
+    IMM  -1
+    PSH 
+    EXIT
+    ADJ  1
+264:       *++e = PSH; *++e = IMM; *++e = (ty > PTR) ? sizeof(int) : sizeof(char);
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  13
+    SI  
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  1
+    SI  
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  40829052
+    LI  
+    PSH 
+    IMM  2
+    GT  
+    BZ   40586388
+    IMM  4
+    JMP  40586396
+    IMM  1
+    SI  
+265:       *++e = (tk == Inc) ? ADD : SUB;
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  162
+    EQ  
+    BZ   40586492
+    IMM  25
+    JMP  40586500
+    IMM  26
+    SI  
+266:       *++e = (ty == CHAR) ? SC : SI;
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  40829052
+    LI  
+    PSH 
+    IMM  0
+    EQ  
+    BZ   40586596
+    IMM  12
+    JMP  40586604
+    IMM  11
+    SI  
+267:       *++e = PSH; *++e = IMM; *++e = (ty > PTR) ? sizeof(int) : sizeof(char);
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  13
+    SI  
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  1
+    SI  
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  40829052
+    LI  
+    PSH 
+    IMM  2
+    GT  
+    BZ   40586804
+    IMM  4
+    JMP  40586812
+    IMM  1
+    SI  
+268:       *++e = (tk == Inc) ? SUB : ADD;
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  162
+    EQ  
+    BZ   40586908
+    IMM  26
+    JMP  40586916
+    IMM  25
+    SI  
+269:       next();
+    JSR  40566868
+270:     }
+271:     else if (tk == Brak) {
+    JMP  0
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  164
+    EQ  
+    BZ   0
+272:       next(); *++e = PSH; expr(Assign);
+    JSR  40566868
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  13
+    SI  
+    IMM  142
+    PSH 
+    JSR  40573364
+    ADJ  1
+273:       if (tk == ']') next(); else { printf("%d: close bracket expected\n", line); exit(-1); }
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  93
+    EQ  
+    BZ   40587112
+    JSR  40566868
+    JMP  0
+    IMM  40829700
+    PSH 
+    IMM  40829060
+    LI  
+    PSH 
+    PRTF
+    ADJ  2
+    IMM  -1
+    PSH 
+    EXIT
+    ADJ  1
+274:       if (t > PTR) { *++e = PSH; *++e = IMM; *++e = sizeof(int); *++e = MUL;  }
+    LEA  -1
+    LI  
+    PSH 
+    IMM  2
+    GT  
+    BZ   0
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  13
+    SI  
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  1
+    SI  
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  4
+    SI  
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  27
+    SI  
+275:       else if (t < PTR) { printf("%d: pointer type expected\n", line); exit(-1); }
+    JMP  0
+    LEA  -1
+    LI  
+    PSH 
+    IMM  2
+    LT  
+    BZ   0
+    IMM  40829728
+    PSH 
+    IMM  40829060
+    LI  
+    PSH 
+    PRTF
+    ADJ  2
+    IMM  -1
+    PSH 
+    EXIT
+    ADJ  1
+276:       *++e = ADD;
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  25
+    SI  
+277:       *++e = ((ty = t - PTR) == CHAR) ? LC : LI;
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  40829052
+    PSH 
+    LEA  -1
+    LI  
+    PSH 
+    IMM  2
+    SUB 
+    SI  
+    PSH 
+    IMM  0
+    EQ  
+    BZ   40587704
+    IMM  10
+    JMP  40587712
+    IMM  9
+    SI  
+278:     }
+279:     else { printf("%d: compiler error tk=%d\n", line, tk); exit(-1); }
+    JMP  0
+    IMM  40829756
+    PSH 
+    IMM  40829060
+    LI  
+    PSH 
+    IMM  40829044
+    LI  
+    PSH 
+    PRTF
+    ADJ  3
+    IMM  -1
+    PSH 
+    EXIT
+    ADJ  1
+280:   }
+281: }
+    JMP  40580020
+    LEV 
+282: 
+283: void stmt()
+284: {
+285:   int *a, *b;
+286: 
+287:   if (tk == If) {
+    ENT  2
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  137
+    EQ  
+    BZ   0
+288:     next();
+    JSR  40566868
+289:     if (tk == '(') next(); else { printf("%d: open paren expected\n", line); exit(-1); }
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  40
+    EQ  
+    BZ   40587920
+    JSR  40566868
+    JMP  0
+    IMM  40829784
+    PSH 
+    IMM  40829060
+    LI  
+    PSH 
+    PRTF
+    ADJ  2
+    IMM  -1
+    PSH 
+    EXIT
+    ADJ  1
+290:     expr(Assign);
+    IMM  142
+    PSH 
+    JSR  40573364
+    ADJ  1
+291:     if (tk == ')') next(); else { printf("%d: close paren expected\n", line); exit(-1); }
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  41
+    EQ  
+    BZ   40588064
+    JSR  40566868
+    JMP  0
+    IMM  40829812
+    PSH 
+    IMM  40829060
+    LI  
+    PSH 
+    PRTF
+    ADJ  2
+    IMM  -1
+    PSH 
+    EXIT
+    ADJ  1
+292:     *++e = BZ; b = ++e;
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  4
+    SI  
+    LEA  -2
+    PSH 
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    SI  
+293:     stmt();
+    JSR  40587816
+294:     if (tk == Else) {
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  135
+    EQ  
+    BZ   0
+295:       *b = (int)(e + 3); *++e = JMP; b = ++e;
+    LEA  -2
+    LI  
+    PSH 
+    IMM  40829028
+    LI  
+    PSH 
+    IMM  3
+    PSH 
+    IMM  4
+    MUL 
+    ADD 
+    SI  
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  2
+    SI  
+    LEA  -2
+    PSH 
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    SI  
+296:       next();
+    JSR  40566868
+297:       stmt();
+    JSR  40587816
+298:     }
+299:     *b = (int)(e + 1);
+    LEA  -2
+    LI  
+    PSH 
+    IMM  40829028
+    LI  
+    PSH 
+    IMM  1
+    PSH 
+    IMM  4
+    MUL 
+    ADD 
+    SI  
+300:   }
+301:   else if (tk == While) {
+    JMP  0
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  141
+    EQ  
+    BZ   0
+302:     next();
+    JSR  40566868
+303:     a = e + 1;
+    LEA  -1
+    PSH 
+    IMM  40829028
+    LI  
+    PSH 
+    IMM  1
+    PSH 
+    IMM  4
+    MUL 
+    ADD 
+    SI  
+304:     if (tk == '(') next(); else { printf("%d: open paren expected\n", line); exit(-1); }
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  40
+    EQ  
+    BZ   40588688
+    JSR  40566868
+    JMP  0
+    IMM  40829840
+    PSH 
+    IMM  40829060
+    LI  
+    PSH 
+    PRTF
+    ADJ  2
+    IMM  -1
+    PSH 
+    EXIT
+    ADJ  1
+305:     expr(Assign);
+    IMM  142
+    PSH 
+    JSR  40573364
+    ADJ  1
+306:     if (tk == ')') next(); else { printf("%d: close paren expected\n", line); exit(-1); }
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  41
+    EQ  
+    BZ   40588832
+    JSR  40566868
+    JMP  0
+    IMM  40829868
+    PSH 
+    IMM  40829060
+    LI  
+    PSH 
+    PRTF
+    ADJ  2
+    IMM  -1
+    PSH 
+    EXIT
+    ADJ  1
+307:     *++e = BZ; b = ++e;
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  4
+    SI  
+    LEA  -2
+    PSH 
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    SI  
+308:     stmt();
+    JSR  40587816
+309:     *++e = JMP; *++e = (int)a;
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  2
+    SI  
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    LEA  -1
+    LI  
+    SI  
+310:     *b = (int)(e + 1);
+    LEA  -2
+    LI  
+    PSH 
+    IMM  40829028
+    LI  
+    PSH 
+    IMM  1
+    PSH 
+    IMM  4
+    MUL 
+    ADD 
+    SI  
+311:   }
+312:   else if (tk == Return) {
+    JMP  0
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  139
+    EQ  
+    BZ   0
+313:     next();
+    JSR  40566868
+314:     if (tk != ';') expr(Assign);
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  59
+    NE  
+    BZ   0
+    IMM  142
+    PSH 
+    JSR  40573364
+    ADJ  1
+315:     *++e = LEV;
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  8
+    SI  
+316:     if (tk == ';') next(); else { printf("%d: semicolon expected\n", line); exit(-1); }
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  59
+    EQ  
+    BZ   40589400
+    JSR  40566868
+    JMP  0
+    IMM  40829896
+    PSH 
+    IMM  40829060
+    LI  
+    PSH 
+    PRTF
+    ADJ  2
+    IMM  -1
+    PSH 
+    EXIT
+    ADJ  1
+317:   }
+318:   else if (tk == '{') {
+    JMP  0
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  123
+    EQ  
+    BZ   0
+319:     next();
+    JSR  40566868
+320:     while (tk != '}') stmt();
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  125
+    NE  
+    BZ   0
+    JSR  40587816
+321:     next();
+    JMP  40589516
+    JSR  40566868
+322:   }
+323:   else if (tk == ';') {
+    JMP  0
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  59
+    EQ  
+    BZ   0
+324:     next();
+    JSR  40566868
+325:   }
+326:   else {
+    JMP  0
+327:     expr(Assign);
+    IMM  142
+    PSH 
+    JSR  40573364
+    ADJ  1
+328:     if (tk == ';') next(); else { printf("%d: semicolon expected\n", line); exit(-1); }
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  59
+    EQ  
+    BZ   40589716
+    JSR  40566868
+    JMP  0
+    IMM  40829920
+    PSH 
+    IMM  40829060
+    LI  
+    PSH 
+    PRTF
+    ADJ  2
+    IMM  -1
+    PSH 
+    EXIT
+    ADJ  1
+329:   }
+330: }
+    LEV 
+331: 
+332: int main(int argc, char **argv)
+333: {
+334:   int fd, bt, ty, poolsz, *idmain;
+335:   int *pc, *sp, *bp, a, cycle; // vm registers
+336:   int i, *t; // temps
+337: 
+338:   --argc; ++argv;
+    ENT  12
+    LEA  3
+    PSH 
+    LI  
+    PSH 
+    IMM  1
+    SUB 
+    SI  
+    LEA  2
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+339:   if (argc > 0 && **argv == '-' && (*argv)[1] == 's') { src = 1; --argc; ++argv; }
+    LEA  3
+    LI  
+    PSH 
+    IMM  0
+    GT  
+    BZ   40589936
+    LEA  2
+    LI  
+    LI  
+    LC  
+    PSH 
+    IMM  45
+    EQ  
+    BZ   40589996
+    LEA  2
+    LI  
+    LI  
+    PSH 
+    IMM  1
+    ADD 
+    LC  
+    PSH 
+    IMM  115
+    EQ  
+    BZ   0
+    IMM  40829064
+    PSH 
+    IMM  1
+    SI  
+    LEA  3
+    PSH 
+    LI  
+    PSH 
+    IMM  1
+    SUB 
+    SI  
+    LEA  2
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+340:   if (argc > 0 && **argv == '-' && (*argv)[1] == 'd') { debug = 1; --argc; ++argv; }
+    LEA  3
+    LI  
+    PSH 
+    IMM  0
+    GT  
+    BZ   40590172
+    LEA  2
+    LI  
+    LI  
+    LC  
+    PSH 
+    IMM  45
+    EQ  
+    BZ   40590232
+    LEA  2
+    LI  
+    LI  
+    PSH 
+    IMM  1
+    ADD 
+    LC  
+    PSH 
+    IMM  100
+    EQ  
+    BZ   0
+    IMM  40829068
+    PSH 
+    IMM  1
+    SI  
+    LEA  3
+    PSH 
+    LI  
+    PSH 
+    IMM  1
+    SUB 
+    SI  
+    LEA  2
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+341:   if (argc < 1) { printf("usage: c4 [-s] [-d] file ...\n"); return -1; }
+    LEA  3
+    LI  
+    PSH 
+    IMM  1
+    LT  
+    BZ   0
+    IMM  40829944
+    PSH 
+    PRTF
+    ADJ  1
+    IMM  -1
+    LEV 
+342: 
+343:   if ((fd = open(*argv, 0)) < 0) { printf("could not open(%s)\n", *argv); return -1; }
+    LEA  -1
+    PSH 
+    LEA  2
+    LI  
+    LI  
+    PSH 
+    IMM  0
+    PSH 
+    OPEN
+    ADJ  2
+    SI  
+    PSH 
+    IMM  0
+    LT  
+    BZ   0
+    IMM  40829976
+    PSH 
+    LEA  2
+    LI  
+    LI  
+    PSH 
+    PRTF
+    ADJ  2
+    IMM  -1
+    LEV 
+344: 
+345:   poolsz = 256*1024; // arbitrary size
+    LEA  -4
+    PSH 
+    IMM  256
+    PSH 
+    IMM  1024
+    MUL 
+    SI  
+346:   if (!(sym = malloc(poolsz))) { printf("could not malloc(%d) symbol area\n", poolsz); return -1; }
+    IMM  40829040
+    PSH 
+    LEA  -4
+    LI  
+    PSH 
+    MALC
+    ADJ  1
+    SI  
+    PSH 
+    IMM  0
+    EQ  
+    BZ   0
+    IMM  40829996
+    PSH 
+    LEA  -4
+    LI  
+    PSH 
+    PRTF
+    ADJ  2
+    IMM  -1
+    LEV 
+347:   if (!(le = e = malloc(poolsz))) { printf("could not malloc(%d) text area\n", poolsz); return -1; }
+    IMM  40829032
+    PSH 
+    IMM  40829028
+    PSH 
+    LEA  -4
+    LI  
+    PSH 
+    MALC
+    ADJ  1
+    SI  
+    SI  
+    PSH 
+    IMM  0
+    EQ  
+    BZ   0
+    IMM  40830032
+    PSH 
+    LEA  -4
+    LI  
+    PSH 
+    PRTF
+    ADJ  2
+    IMM  -1
+    LEV 
+348:   if (!(data = malloc(poolsz))) { printf("could not malloc(%d) data area\n", poolsz); return -1; }
+    IMM  40829024
+    PSH 
+    LEA  -4
+    LI  
+    PSH 
+    MALC
+    ADJ  1
+    SI  
+    PSH 
+    IMM  0
+    EQ  
+    BZ   0
+    IMM  40830064
+    PSH 
+    LEA  -4
+    LI  
+    PSH 
+    PRTF
+    ADJ  2
+    IMM  -1
+    LEV 
+349:   if (!(sp = malloc(poolsz))) { printf("could not malloc(%d) stack area\n", poolsz); return -1; }
+    LEA  -7
+    PSH 
+    LEA  -4
+    LI  
+    PSH 
+    MALC
+    ADJ  1
+    SI  
+    PSH 
+    IMM  0
+    EQ  
+    BZ   0
+    IMM  40830096
+    PSH 
+    LEA  -4
+    LI  
+    PSH 
+    PRTF
+    ADJ  2
+    IMM  -1
+    LEV 
+350: 
+351:   memset(sym,  0, poolsz);
+    IMM  40829040
+    LI  
+    PSH 
+    IMM  0
+    PSH 
+    LEA  -4
+    LI  
+    PSH 
+    MSET
+    ADJ  3
+352:   memset(e,    0, poolsz);
+    IMM  40829028
+    LI  
+    PSH 
+    IMM  0
+    PSH 
+    LEA  -4
+    LI  
+    PSH 
+    MSET
+    ADJ  3
+353:   memset(data, 0, poolsz);
+    IMM  40829024
+    LI  
+    PSH 
+    IMM  0
+    PSH 
+    LEA  -4
+    LI  
+    PSH 
+    MSET
+    ADJ  3
+354: 
+355:   p = "char else enum if int return sizeof while "
+    IMM  40829016
+    PSH 
+    IMM  40830132
+356:       "open read close printf malloc free memset memcmp exit void main";
+    SI  
+357:   i = Char; while (i <= While) { next(); id[Tk] = i++; } // add keywords to symbol table
+    LEA  -11
+    PSH 
+    IMM  134
+    SI  
+    LEA  -11
+    LI  
+    PSH 
+    IMM  141
+    LE  
+    BZ   0
+    JSR  40566868
+    IMM  40829036
+    LI  
+    PSH 
+    IMM  0
+    PSH 
+    IMM  4
+    MUL 
+    ADD 
+    PSH 
+    LEA  -11
+    PSH 
+    LI  
+    PSH 
+    IMM  1
+    ADD 
+    SI  
+    PSH 
+    IMM  1
+    SUB 
+    SI  
+358:   i = OPEN; while (i <= EXIT) { next(); id[Class] = Sys; id[Type] = INT; id[Val] = i++; } // add library to symbol table
+    JMP  40591300
+    LEA  -11
+    PSH 
+    IMM  30
+    SI  
+    LEA  -11
+    LI  
+    PSH 
+    IMM  38
+    LE  
+    BZ   0
+    JSR  40566868
+    IMM  40829036
+    LI  
+    PSH 
+    IMM  3
+    PSH 
+    IMM  4
+    MUL 
+    ADD 
+    PSH 
+    IMM  130
+    SI  
+    IMM  40829036
+    LI  
+    PSH 
+    IMM  4
+    PSH 
+    IMM  4
+    MUL 
+    ADD 
+    PSH 
+    IMM  1
+    SI  
+    IMM  40829036
+    LI  
+    PSH 
+    IMM  5
+    PSH 
+    IMM  4
+    MUL 
+    ADD 
+    PSH 
+    LEA  -11
+    PSH 
+    LI  
+    PSH 
+    IMM  1
+    ADD 
+    SI  
+    PSH 
+    IMM  1
+    SUB 
+    SI  
+359:   next(); id[Tk] = Char; // handle void type
+    JMP  40591480
+    JSR  40566868
+    IMM  40829036
+    LI  
+    PSH 
+    IMM  0
+    PSH 
+    IMM  4
+    MUL 
+    ADD 
+    PSH 
+    IMM  134
+    SI  
+360:   next(); idmain = id; // keep track of main
+    JSR  40566868
+    LEA  -5
+    PSH 
+    IMM  40829036
+    LI  
+    SI  
+361: 
+362:   if (!(lp = p = malloc(poolsz))) { printf("could not malloc(%d) source area\n", poolsz); return -1; }
+    IMM  40829020
+    PSH 
+    IMM  40829016
+    PSH 
+    LEA  -4
+    LI  
+    PSH 
+    MALC
+    ADJ  1
+    SI  
+    SI  
+    PSH 
+    IMM  0
+    EQ  
+    BZ   0
+    IMM  40830240
+    PSH 
+    LEA  -4
+    LI  
+    PSH 
+    PRTF
+    ADJ  2
+    IMM  -1
+    LEV 
+363:   if ((i = read(fd, p, poolsz-1)) <= 0) { printf("read() returned %d\n", i); return -1; }
+    LEA  -11
+    PSH 
+    LEA  -1
+    LI  
+    PSH 
+    IMM  40829016
+    LI  
+    PSH 
+    LEA  -4
+    LI  
+    PSH 
+    IMM  1
+    SUB 
+    PSH 
+    READ
+    ADJ  3
+    SI  
+    PSH 
+    IMM  0
+    LE  
+    BZ   0
+    IMM  40830276
+    PSH 
+    LEA  -11
+    LI  
+    PSH 
+    PRTF
+    ADJ  2
+    IMM  -1
+    LEV 
+364:   p[i] = 0;
+    IMM  40829016
+    LI  
+    PSH 
+    LEA  -11
+    LI  
+    ADD 
+    PSH 
+    IMM  0
+    SC  
+365:   close(fd);
+    LEA  -1
+    LI  
+    PSH 
+    CLOS
+    ADJ  1
+366: 
+367:   // parse declarations
+368:   line = 1;
+    IMM  40829060
+    PSH 
+    IMM  1
+    SI  
+369:   next();
+    JSR  40566868
+370:   while (tk) {
+    IMM  40829044
+    LI  
+    BZ   0
+371:     bt = INT; // basetype
+    LEA  -2
+    PSH 
+    IMM  1
+    SI  
+372:     if (tk == Int) next();
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  138
+    EQ  
+    BZ   0
+    JSR  40566868
+373:     else if (tk == Char) { next(); bt = CHAR; }
+    JMP  0
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  134
+    EQ  
+    BZ   0
+    JSR  40566868
+    LEA  -2
+    PSH 
+    IMM  0
+    SI  
+374:     else if (tk == Enum) {
+    JMP  0
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  136
+    EQ  
+    BZ   0
+375:       next();
+    JSR  40566868
+376:       if (tk != '{') next();
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  123
+    NE  
+    BZ   0
+    JSR  40566868
+377:       if (tk == '{') {
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  123
+    EQ  
+    BZ   0
+378:         next();
+    JSR  40566868
+379:         i = 0;
+    LEA  -11
+    PSH 
+    IMM  0
+    SI  
+380:         while (tk != '}') {
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  125
+    NE  
+    BZ   0
+381:           if (tk != Id) { printf("%d: bad enum identifier %d\n", line, tk); return -1; }
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  133
+    NE  
+    BZ   0
+    IMM  40830296
+    PSH 
+    IMM  40829060
+    LI  
+    PSH 
+    IMM  40829044
+    LI  
+    PSH 
+    PRTF
+    ADJ  3
+    IMM  -1
+    LEV 
+382:           next();
+    JSR  40566868
+383:           if (tk == Assign) {
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  142
+    EQ  
+    BZ   0
+384:             next();
+    JSR  40566868
+385:             if (tk != Num) { printf("%d: bad enum initializer\n", line); return -1; }
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  128
+    NE  
+    BZ   0
+    IMM  40830324
+    PSH 
+    IMM  40829060
+    LI  
+    PSH 
+    PRTF
+    ADJ  2
+    IMM  -1
+    LEV 
+386:             i = ival;
+    LEA  -11
+    PSH 
+    IMM  40829048
+    LI  
+    SI  
+387:             next();
+    JSR  40566868
+388:           }
+389:           id[Class] = Num; id[Type] = INT; id[Val] = i++;
+    IMM  40829036
+    LI  
+    PSH 
+    IMM  3
+    PSH 
+    IMM  4
+    MUL 
+    ADD 
+    PSH 
+    IMM  128
+    SI  
+    IMM  40829036
+    LI  
+    PSH 
+    IMM  4
+    PSH 
+    IMM  4
+    MUL 
+    ADD 
+    PSH 
+    IMM  1
+    SI  
+    IMM  40829036
+    LI  
+    PSH 
+    IMM  5
+    PSH 
+    IMM  4
+    MUL 
+    ADD 
+    PSH 
+    LEA  -11
+    PSH 
+    LI  
+    PSH 
+    IMM  1
+    ADD 
+    SI  
+    PSH 
+    IMM  1
+    SUB 
+    SI  
+390:           if (tk == ',') next();
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  44
+    EQ  
+    BZ   0
+    JSR  40566868
+391:         }
+392:         next();
+    JMP  40592600
+    JSR  40566868
+393:       }
+394:     }
+395:     while (tk != ';' && tk != '}') {
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  59
+    NE  
+    BZ   40593264
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  125
+    NE  
+    BZ   0
+396:       ty = bt;
+    LEA  -3
+    PSH 
+    LEA  -2
+    LI  
+    SI  
+397:       while (tk == Mul) { next(); ty = ty + PTR; }
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  159
+    EQ  
+    BZ   0
+    JSR  40566868
+    LEA  -3
+    PSH 
+    LEA  -3
+    LI  
+    PSH 
+    IMM  2
+    ADD 
+    SI  
+398:       if (tk != Id) { printf("%d: bad global declaration\n", line); return -1; }
+    JMP  40593300
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  133
+    NE  
+    BZ   0
+    IMM  40830352
+    PSH 
+    IMM  40829060
+    LI  
+    PSH 
+    PRTF
+    ADJ  2
+    IMM  -1
+    LEV 
+399:       if (id[Class]) { printf("%d: duplicate global definition\n", line); return -1; }
+    IMM  40829036
+    LI  
+    PSH 
+    IMM  3
+    PSH 
+    IMM  4
+    MUL 
+    ADD 
+    LI  
+    BZ   0
+    IMM  40830380
+    PSH 
+    IMM  40829060
+    LI  
+    PSH 
+    PRTF
+    ADJ  2
+    IMM  -1
+    LEV 
+400:       next();
+    JSR  40566868
+401:       id[Type] = ty;
+    IMM  40829036
+    LI  
+    PSH 
+    IMM  4
+    PSH 
+    IMM  4
+    MUL 
+    ADD 
+    PSH 
+    LEA  -3
+    LI  
+    SI  
+402:       if (tk == '(') { // function
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  40
+    EQ  
+    BZ   0
+403:         id[Class] = Fun;
+    IMM  40829036
+    LI  
+    PSH 
+    IMM  3
+    PSH 
+    IMM  4
+    MUL 
+    ADD 
+    PSH 
+    IMM  129
+    SI  
+404:         id[Val] = (int)(e + 1);
+    IMM  40829036
+    LI  
+    PSH 
+    IMM  5
+    PSH 
+    IMM  4
+    MUL 
+    ADD 
+    PSH 
+    IMM  40829028
+    LI  
+    PSH 
+    IMM  1
+    PSH 
+    IMM  4
+    MUL 
+    ADD 
+    SI  
+405:         next(); i = 0;
+    JSR  40566868
+    LEA  -11
+    PSH 
+    IMM  0
+    SI  
+406:         while (tk != ')') {
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  41
+    NE  
+    BZ   0
+407:           ty = INT;
+    LEA  -3
+    PSH 
+    IMM  1
+    SI  
+408:           if (tk == Int) next();
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  138
+    EQ  
+    BZ   0
+    JSR  40566868
+409:           else if (tk == Char) { next(); ty = CHAR; }
+    JMP  0
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  134
+    EQ  
+    BZ   0
+    JSR  40566868
+    LEA  -3
+    PSH 
+    IMM  0
+    SI  
+410:           while (tk == Mul) { next(); ty = ty + PTR; }
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  159
+    EQ  
+    BZ   0
+    JSR  40566868
+    LEA  -3
+    PSH 
+    LEA  -3
+    LI  
+    PSH 
+    IMM  2
+    ADD 
+    SI  
+411:           if (tk != Id) { printf("%d: bad parameter declaration\n", line); return -1; }
+    JMP  40594068
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  133
+    NE  
+    BZ   0
+    IMM  40830416
+    PSH 
+    IMM  40829060
+    LI  
+    PSH 
+    PRTF
+    ADJ  2
+    IMM  -1
+    LEV 
+412:           if (id[Class] == Loc) { printf("%d: duplicate parameter definition\n", line); return -1; }
+    IMM  40829036
+    LI  
+    PSH 
+    IMM  3
+    PSH 
+    IMM  4
+    MUL 
+    ADD 
+    LI  
+    PSH 
+    IMM  132
+    EQ  
+    BZ   0
+    IMM  40830448
+    PSH 
+    IMM  40829060
+    LI  
+    PSH 
+    PRTF
+    ADJ  2
+    IMM  -1
+    LEV 
+413:           id[HClass] = id[Class]; id[Class] = Loc;
+    IMM  40829036
+    LI  
+    PSH 
+    IMM  6
+    PSH 
+    IMM  4
+    MUL 
+    ADD 
+    PSH 
+    IMM  40829036
+    LI  
+    PSH 
+    IMM  3
+    PSH 
+    IMM  4
+    MUL 
+    ADD 
+    LI  
+    SI  
+    IMM  40829036
+    LI  
+    PSH 
+    IMM  3
+    PSH 
+    IMM  4
+    MUL 
+    ADD 
+    PSH 
+    IMM  132
+    SI  
+414:           id[HType]  = id[Type];  id[Type] = ty;
+    IMM  40829036
+    LI  
+    PSH 
+    IMM  7
+    PSH 
+    IMM  4
+    MUL 
+    ADD 
+    PSH 
+    IMM  40829036
+    LI  
+    PSH 
+    IMM  4
+    PSH 
+    IMM  4
+    MUL 
+    ADD 
+    LI  
+    SI  
+    IMM  40829036
+    LI  
+    PSH 
+    IMM  4
+    PSH 
+    IMM  4
+    MUL 
+    ADD 
+    PSH 
+    LEA  -3
+    LI  
+    SI  
+415:           id[HVal]   = id[Val];   id[Val] = i++;
+    IMM  40829036
+    LI  
+    PSH 
+    IMM  8
+    PSH 
+    IMM  4
+    MUL 
+    ADD 
+    PSH 
+    IMM  40829036
+    LI  
+    PSH 
+    IMM  5
+    PSH 
+    IMM  4
+    MUL 
+    ADD 
+    LI  
+    SI  
+    IMM  40829036
+    LI  
+    PSH 
+    IMM  5
+    PSH 
+    IMM  4
+    MUL 
+    ADD 
+    PSH 
+    LEA  -11
+    PSH 
+    LI  
+    PSH 
+    IMM  1
+    ADD 
+    SI  
+    PSH 
+    IMM  1
+    SUB 
+    SI  
+416:           next();
+    JSR  40566868
+417:           if (tk == ',') next();
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  44
+    EQ  
+    BZ   0
+    JSR  40566868
+418:         }
+419:         next();
+    JMP  40593888
+    JSR  40566868
+420:         if (tk != '{') { printf("%d: bad function definition\n", line); return -1; }
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  123
+    NE  
+    BZ   0
+    IMM  40830484
+    PSH 
+    IMM  40829060
+    LI  
+    PSH 
+    PRTF
+    ADJ  2
+    IMM  -1
+    LEV 
+421:         loc = ++i;
+    IMM  40829056
+    PSH 
+    LEA  -11
+    PSH 
+    LI  
+    PSH 
+    IMM  1
+    ADD 
+    SI  
+    SI  
+422:         next();
+    JSR  40566868
+423:         while (tk == Int || tk == Char) {
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  138
+    EQ  
+    BNZ  40595184
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  134
+    EQ  
+    BZ   0
+424:           bt = (tk == Int) ? INT : CHAR;
+    LEA  -2
+    PSH 
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  138
+    EQ  
+    BZ   40595256
+    IMM  1
+    JMP  40595264
+    IMM  0
+    SI  
+425:           next();
+    JSR  40566868
+426:           while (tk != ';') {
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  59
+    NE  
+    BZ   0
+427:             ty = bt;
+    LEA  -3
+    PSH 
+    LEA  -2
+    LI  
+    SI  
+428:             while (tk == Mul) { next(); ty = ty + PTR; }
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  159
+    EQ  
+    BZ   0
+    JSR  40566868
+    LEA  -3
+    PSH 
+    LEA  -3
+    LI  
+    PSH 
+    IMM  2
+    ADD 
+    SI  
+429:             if (tk != Id) { printf("%d: bad local declaration\n", line); return -1; }
+    JMP  40595340
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  133
+    NE  
+    BZ   0
+    IMM  40830516
+    PSH 
+    IMM  40829060
+    LI  
+    PSH 
+    PRTF
+    ADJ  2
+    IMM  -1
+    LEV 
+430:             if (id[Class] == Loc) { printf("%d: duplicate local definition\n", line); return -1; }
+    IMM  40829036
+    LI  
+    PSH 
+    IMM  3
+    PSH 
+    IMM  4
+    MUL 
+    ADD 
+    LI  
+    PSH 
+    IMM  132
+    EQ  
+    BZ   0
+    IMM  40830544
+    PSH 
+    IMM  40829060
+    LI  
+    PSH 
+    PRTF
+    ADJ  2
+    IMM  -1
+    LEV 
+431:             id[HClass] = id[Class]; id[Class] = Loc;
+    IMM  40829036
+    LI  
+    PSH 
+    IMM  6
+    PSH 
+    IMM  4
+    MUL 
+    ADD 
+    PSH 
+    IMM  40829036
+    LI  
+    PSH 
+    IMM  3
+    PSH 
+    IMM  4
+    MUL 
+    ADD 
+    LI  
+    SI  
+    IMM  40829036
+    LI  
+    PSH 
+    IMM  3
+    PSH 
+    IMM  4
+    MUL 
+    ADD 
+    PSH 
+    IMM  132
+    SI  
+432:             id[HType]  = id[Type];  id[Type] = ty;
+    IMM  40829036
+    LI  
+    PSH 
+    IMM  7
+    PSH 
+    IMM  4
+    MUL 
+    ADD 
+    PSH 
+    IMM  40829036
+    LI  
+    PSH 
+    IMM  4
+    PSH 
+    IMM  4
+    MUL 
+    ADD 
+    LI  
+    SI  
+    IMM  40829036
+    LI  
+    PSH 
+    IMM  4
+    PSH 
+    IMM  4
+    MUL 
+    ADD 
+    PSH 
+    LEA  -3
+    LI  
+    SI  
+433:             id[HVal]   = id[Val];   id[Val] = ++i;
+    IMM  40829036
+    LI  
+    PSH 
+    IMM  8
+    PSH 
+    IMM  4
+    MUL 
+    ADD 
+    PSH 
+    IMM  40829036
+    LI  
+    PSH 
+    IMM  5
+    PSH 
+    IMM  4
+    MUL 
+    ADD 
+    LI  
+    SI  
+    IMM  40829036
+    LI  
+    PSH 
+    IMM  5
+    PSH 
+    IMM  4
+    MUL 
+    ADD 
+    PSH 
+    LEA  -11
+    PSH 
+    LI  
+    PSH 
+    IMM  1
+    ADD 
+    SI  
+    SI  
+434:             next();
+    JSR  40566868
+435:             if (tk == ',') next();
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  44
+    EQ  
+    BZ   0
+    JSR  40566868
+436:           }
+437:           next();
+    JMP  40595276
+    JSR  40566868
+438:         }
+439:         *++e = ENT; *++e = i - loc;
+    JMP  40595120
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  6
+    SI  
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    LEA  -11
+    LI  
+    PSH 
+    IMM  40829056
+    LI  
+    SUB 
+    SI  
+440:         while (tk != '}') stmt();
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  125
+    NE  
+    BZ   0
+    JSR  40587816
+441:         *++e = LEV;
+    JMP  40596364
+    IMM  40829028
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  8
+    SI  
+442:         id = sym; // unwind symbol table locals
+    IMM  40829036
+    PSH 
+    IMM  40829040
+    LI  
+    SI  
+443:         while (id[Tk]) {
+    IMM  40829036
+    LI  
+    PSH 
+    IMM  0
+    PSH 
+    IMM  4
+    MUL 
+    ADD 
+    LI  
+    BZ   0
+444:           if (id[Class] == Loc) {
+    IMM  40829036
+    LI  
+    PSH 
+    IMM  3
+    PSH 
+    IMM  4
+    MUL 
+    ADD 
+    LI  
+    PSH 
+    IMM  132
+    EQ  
+    BZ   0
+445:             id[Class] = id[HClass];
+    IMM  40829036
+    LI  
+    PSH 
+    IMM  3
+    PSH 
+    IMM  4
+    MUL 
+    ADD 
+    PSH 
+    IMM  40829036
+    LI  
+    PSH 
+    IMM  6
+    PSH 
+    IMM  4
+    MUL 
+    ADD 
+    LI  
+    SI  
+446:             id[Type] = id[HType];
+    IMM  40829036
+    LI  
+    PSH 
+    IMM  4
+    PSH 
+    IMM  4
+    MUL 
+    ADD 
+    PSH 
+    IMM  40829036
+    LI  
+    PSH 
+    IMM  7
+    PSH 
+    IMM  4
+    MUL 
+    ADD 
+    LI  
+    SI  
+447:             id[Val] = id[HVal];
+    IMM  40829036
+    LI  
+    PSH 
+    IMM  5
+    PSH 
+    IMM  4
+    MUL 
+    ADD 
+    PSH 
+    IMM  40829036
+    LI  
+    PSH 
+    IMM  8
+    PSH 
+    IMM  4
+    MUL 
+    ADD 
+    LI  
+    SI  
+448:           }
+449:           id = id + Idsz;
+    IMM  40829036
+    PSH 
+    IMM  40829036
+    LI  
+    PSH 
+    IMM  9
+    PSH 
+    IMM  4
+    MUL 
+    ADD 
+    SI  
+450:         }
+451:       }
+    JMP  40596496
+452:       else {
+    JMP  0
+453:         id[Class] = Glo;
+    IMM  40829036
+    LI  
+    PSH 
+    IMM  3
+    PSH 
+    IMM  4
+    MUL 
+    ADD 
+    PSH 
+    IMM  131
+    SI  
+454:         id[Val] = (int)data;
+    IMM  40829036
+    LI  
+    PSH 
+    IMM  5
+    PSH 
+    IMM  4
+    MUL 
+    ADD 
+    PSH 
+    IMM  40829024
+    LI  
+    SI  
+455:         data = data + sizeof(int);
+    IMM  40829024
+    PSH 
+    IMM  40829024
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+456:       }
+457:       if (tk == ',') next();
+    IMM  40829044
+    LI  
+    PSH 
+    IMM  44
+    EQ  
+    BZ   0
+    JSR  40566868
+458:     }
+459:     next();
+    JMP  40593200
+    JSR  40566868
+460:   }
+461: 
+462:   if (!(pc = (int *)idmain[Val])) { printf("main() not defined\n"); return -1; }
+    JMP  40592272
+    LEA  -6
+    PSH 
+    LEA  -5
+    LI  
+    PSH 
+    IMM  5
+    PSH 
+    IMM  4
+    MUL 
+    ADD 
+    LI  
+    SI  
+    PSH 
+    IMM  0
+    EQ  
+    BZ   0
+    IMM  40830576
+    PSH 
+    PRTF
+    ADJ  1
+    IMM  -1
+    LEV 
+463:   if (src) return 0;
+    IMM  40829064
+    LI  
+    BZ   0
+    IMM  0
+    LEV 
+464: 
+465:   // setup stack
+466:   bp = sp = (int *)((int)sp + poolsz);
+    LEA  -8
+    PSH 
+    LEA  -7
+    PSH 
+    LEA  -7
+    LI  
+    PSH 
+    LEA  -4
+    LI  
+    ADD 
+    SI  
+    SI  
+467:   *--sp = EXIT; // call exit if main returns
+    LEA  -7
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    SUB 
+    SI  
+    PSH 
+    IMM  38
+    SI  
+468:   *--sp = PSH; t = sp;
+    LEA  -7
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    SUB 
+    SI  
+    PSH 
+    IMM  13
+    SI  
+    LEA  -12
+    PSH 
+    LEA  -7
+    LI  
+    SI  
+469:   *--sp = argc;
+    LEA  -7
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    SUB 
+    SI  
+    PSH 
+    LEA  3
+    LI  
+    SI  
+470:   *--sp = (int)argv;
+    LEA  -7
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    SUB 
+    SI  
+    PSH 
+    LEA  2
+    LI  
+    SI  
+471:   *--sp = (int)t;
+    LEA  -7
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    SUB 
+    SI  
+    PSH 
+    LEA  -12
+    LI  
+    SI  
+472: 
+473:   // run...
+474:   cycle = 0;
+    LEA  -10
+    PSH 
+    IMM  0
+    SI  
+475:   while (1) {
+    IMM  1
+    BZ   0
+476:     i = *pc++; ++cycle;
+    LEA  -11
+    PSH 
+    LEA  -6
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  4
+    SUB 
+    LI  
+    SI  
+    LEA  -10
+    PSH 
+    LI  
+    PSH 
+    IMM  1
+    ADD 
+    SI  
+477:     if (debug) {
+    IMM  40829068
+    LI  
+    BZ   0
+478:       printf("%d> %.4s", cycle,
+    IMM  40830596
+    PSH 
+    LEA  -10
+    LI  
+    PSH 
+479:         &"LEA ,IMM ,JMP ,JSR ,BZ  ,BNZ ,ENT ,ADJ ,LEV ,LI  ,LC  ,SI  ,SC  ,PSH ,"
+    IMM  40830608
+480:          "OR  ,XOR ,AND ,EQ  ,NE  ,LT  ,GT  ,LE  ,GE  ,SHL ,SHR ,ADD ,SUB ,MUL ,DIV ,MOD ,"
+481:          "OPEN,READ,CLOS,PRTF,MALC,FREE,MSET,MCMP,EXIT,"[i * 5]);
+    PSH 
+    LEA  -11
+    LI  
+    PSH 
+    IMM  5
+    MUL 
+    ADD 
+    PSH 
+    PRTF
+    ADJ  3
+482:       if (i <= ADJ) printf(" %d\n", *pc); else printf("\n");
+    LEA  -11
+    LI  
+    PSH 
+    IMM  7
+    LE  
+    BZ   40598100
+    IMM  40830804
+    PSH 
+    LEA  -6
+    LI  
+    LI  
+    PSH 
+    PRTF
+    ADJ  2
+    JMP  0
+    IMM  40830812
+    PSH 
+    PRTF
+    ADJ  1
+483:     }
+484:     if      (i == LEA) a = (int)(bp + *pc++);                             // load local address
+    LEA  -11
+    LI  
+    PSH 
+    IMM  0
+    EQ  
+    BZ   0
+    LEA  -9
+    PSH 
+    LEA  -8
+    LI  
+    PSH 
+    LEA  -6
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  4
+    SUB 
+    LI  
+    PSH 
+    IMM  4
+    MUL 
+    ADD 
+    SI  
+485:     else if (i == IMM) a = *pc++;                                         // load global address or immediate
+    JMP  0
+    LEA  -11
+    LI  
+    PSH 
+    IMM  1
+    EQ  
+    BZ   0
+    LEA  -9
+    PSH 
+    LEA  -6
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  4
+    SUB 
+    LI  
+    SI  
+486:     else if (i == JMP) pc = (int *)*pc;                                   // jump
+    JMP  0
+    LEA  -11
+    LI  
+    PSH 
+    IMM  2
+    EQ  
+    BZ   0
+    LEA  -6
+    PSH 
+    LEA  -6
+    LI  
+    LI  
+    SI  
+487:     else if (i == JSR) { *--sp = (int)(pc + 1); pc = (int *)*pc; }        // jump to subroutine
+    JMP  0
+    LEA  -11
+    LI  
+    PSH 
+    IMM  3
+    EQ  
+    BZ   0
+    LEA  -7
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    SUB 
+    SI  
+    PSH 
+    LEA  -6
+    LI  
+    PSH 
+    IMM  1
+    PSH 
+    IMM  4
+    MUL 
+    ADD 
+    SI  
+    LEA  -6
+    PSH 
+    LEA  -6
+    LI  
+    LI  
+    SI  
+488:     else if (i == BZ)  pc = a ? pc + 1 : (int *)*pc;                      // branch if zero
+    JMP  0
+    LEA  -11
+    LI  
+    PSH 
+    IMM  4
+    EQ  
+    BZ   0
+    LEA  -6
+    PSH 
+    LEA  -9
+    LI  
+    BZ   40598752
+    LEA  -6
+    LI  
+    PSH 
+    IMM  1
+    PSH 
+    IMM  4
+    MUL 
+    ADD 
+    JMP  40598768
+    LEA  -6
+    LI  
+    LI  
+    SI  
+489:     else if (i == BNZ) pc = a ? (int *)*pc : pc + 1;                      // branch if not zero
+    JMP  0
+    LEA  -11
+    LI  
+    PSH 
+    IMM  5
+    EQ  
+    BZ   0
+    LEA  -6
+    PSH 
+    LEA  -9
+    LI  
+    BZ   40598872
+    LEA  -6
+    LI  
+    LI  
+    JMP  40598916
+    LEA  -6
+    LI  
+    PSH 
+    IMM  1
+    PSH 
+    IMM  4
+    MUL 
+    ADD 
+    SI  
+490:     else if (i == ENT) { *--sp = (int)bp; bp = sp; sp = sp - *pc++; }     // enter subroutine
+    JMP  0
+    LEA  -11
+    LI  
+    PSH 
+    IMM  6
+    EQ  
+    BZ   0
+    LEA  -7
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    SUB 
+    SI  
+    PSH 
+    LEA  -8
+    LI  
+    SI  
+    LEA  -8
+    PSH 
+    LEA  -7
+    LI  
+    SI  
+    LEA  -7
+    PSH 
+    LEA  -7
+    LI  
+    PSH 
+    LEA  -6
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  4
+    SUB 
+    LI  
+    PSH 
+    IMM  4
+    MUL 
+    SUB 
+    SI  
+491:     else if (i == ADJ) sp = sp + *pc++;                                   // stack adjust
+    JMP  0
+    LEA  -11
+    LI  
+    PSH 
+    IMM  7
+    EQ  
+    BZ   0
+    LEA  -7
+    PSH 
+    LEA  -7
+    LI  
+    PSH 
+    LEA  -6
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  4
+    SUB 
+    LI  
+    PSH 
+    IMM  4
+    MUL 
+    ADD 
+    SI  
+492:     else if (i == LEV) { sp = bp; bp = (int *)*sp++; pc = (int *)*sp++; } // leave subroutine
+    JMP  0
+    LEA  -11
+    LI  
+    PSH 
+    IMM  8
+    EQ  
+    BZ   0
+    LEA  -7
+    PSH 
+    LEA  -8
+    LI  
+    SI  
+    LEA  -8
+    PSH 
+    LEA  -7
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  4
+    SUB 
+    LI  
+    SI  
+    LEA  -6
+    PSH 
+    LEA  -7
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  4
+    SUB 
+    LI  
+    SI  
+493:     else if (i == LI)  a = *(int *)a;                                     // load int
+    JMP  0
+    LEA  -11
+    LI  
+    PSH 
+    IMM  9
+    EQ  
+    BZ   0
+    LEA  -9
+    PSH 
+    LEA  -9
+    LI  
+    LI  
+    SI  
+494:     else if (i == LC)  a = *(char *)a;                                    // load char
+    JMP  0
+    LEA  -11
+    LI  
+    PSH 
+    IMM  10
+    EQ  
+    BZ   0
+    LEA  -9
+    PSH 
+    LEA  -9
+    LI  
+    LC  
+    SI  
+495:     else if (i == SI)  *(int *)*sp++ = a;                                 // store int
+    JMP  0
+    LEA  -11
+    LI  
+    PSH 
+    IMM  11
+    EQ  
+    BZ   0
+    LEA  -7
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  4
+    SUB 
+    LI  
+    PSH 
+    LEA  -9
+    LI  
+    SI  
+496:     else if (i == SC)  a = *(char *)*sp++ = a;                            // store char
+    JMP  0
+    LEA  -11
+    LI  
+    PSH 
+    IMM  12
+    EQ  
+    BZ   0
+    LEA  -9
+    PSH 
+    LEA  -7
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  4
+    SUB 
+    LI  
+    PSH 
+    LEA  -9
+    LI  
+    SC  
+    SI  
+497:     else if (i == PSH) *--sp = a;                                         // push
+    JMP  0
+    LEA  -11
+    LI  
+    PSH 
+    IMM  13
+    EQ  
+    BZ   0
+    LEA  -7
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    SUB 
+    SI  
+    PSH 
+    LEA  -9
+    LI  
+    SI  
+498: 
+499:     else if (i == OR)  a = *sp++ |  a;
+    JMP  0
+    LEA  -11
+    LI  
+    PSH 
+    IMM  14
+    EQ  
+    BZ   0
+    LEA  -9
+    PSH 
+    LEA  -7
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  4
+    SUB 
+    LI  
+    PSH 
+    LEA  -9
+    LI  
+    OR  
+    SI  
+500:     else if (i == XOR) a = *sp++ ^  a;
+    JMP  0
+    LEA  -11
+    LI  
+    PSH 
+    IMM  15
+    EQ  
+    BZ   0
+    LEA  -9
+    PSH 
+    LEA  -7
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  4
+    SUB 
+    LI  
+    PSH 
+    LEA  -9
+    LI  
+    XOR 
+    SI  
+501:     else if (i == AND) a = *sp++ &  a;
+    JMP  0
+    LEA  -11
+    LI  
+    PSH 
+    IMM  16
+    EQ  
+    BZ   0
+    LEA  -9
+    PSH 
+    LEA  -7
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  4
+    SUB 
+    LI  
+    PSH 
+    LEA  -9
+    LI  
+    AND 
+    SI  
+502:     else if (i == EQ)  a = *sp++ == a;
+    JMP  0
+    LEA  -11
+    LI  
+    PSH 
+    IMM  17
+    EQ  
+    BZ   0
+    LEA  -9
+    PSH 
+    LEA  -7
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  4
+    SUB 
+    LI  
+    PSH 
+    LEA  -9
+    LI  
+    EQ  
+    SI  
+503:     else if (i == NE)  a = *sp++ != a;
+    JMP  0
+    LEA  -11
+    LI  
+    PSH 
+    IMM  18
+    EQ  
+    BZ   0
+    LEA  -9
+    PSH 
+    LEA  -7
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  4
+    SUB 
+    LI  
+    PSH 
+    LEA  -9
+    LI  
+    NE  
+    SI  
+504:     else if (i == LT)  a = *sp++ <  a;
+    JMP  0
+    LEA  -11
+    LI  
+    PSH 
+    IMM  19
+    EQ  
+    BZ   0
+    LEA  -9
+    PSH 
+    LEA  -7
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  4
+    SUB 
+    LI  
+    PSH 
+    LEA  -9
+    LI  
+    LT  
+    SI  
+505:     else if (i == GT)  a = *sp++ >  a;
+    JMP  0
+    LEA  -11
+    LI  
+    PSH 
+    IMM  20
+    EQ  
+    BZ   0
+    LEA  -9
+    PSH 
+    LEA  -7
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  4
+    SUB 
+    LI  
+    PSH 
+    LEA  -9
+    LI  
+    GT  
+    SI  
+506:     else if (i == LE)  a = *sp++ <= a;
+    JMP  0
+    LEA  -11
+    LI  
+    PSH 
+    IMM  21
+    EQ  
+    BZ   0
+    LEA  -9
+    PSH 
+    LEA  -7
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  4
+    SUB 
+    LI  
+    PSH 
+    LEA  -9
+    LI  
+    LE  
+    SI  
+507:     else if (i == GE)  a = *sp++ >= a;
+    JMP  0
+    LEA  -11
+    LI  
+    PSH 
+    IMM  22
+    EQ  
+    BZ   0
+    LEA  -9
+    PSH 
+    LEA  -7
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  4
+    SUB 
+    LI  
+    PSH 
+    LEA  -9
+    LI  
+    GE  
+    SI  
+508:     else if (i == SHL) a = *sp++ << a;
+    JMP  0
+    LEA  -11
+    LI  
+    PSH 
+    IMM  23
+    EQ  
+    BZ   0
+    LEA  -9
+    PSH 
+    LEA  -7
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  4
+    SUB 
+    LI  
+    PSH 
+    LEA  -9
+    LI  
+    SHL 
+    SI  
+509:     else if (i == SHR) a = *sp++ >> a;
+    JMP  0
+    LEA  -11
+    LI  
+    PSH 
+    IMM  24
+    EQ  
+    BZ   0
+    LEA  -9
+    PSH 
+    LEA  -7
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  4
+    SUB 
+    LI  
+    PSH 
+    LEA  -9
+    LI  
+    SHR 
+    SI  
+510:     else if (i == ADD) a = *sp++ +  a;
+    JMP  0
+    LEA  -11
+    LI  
+    PSH 
+    IMM  25
+    EQ  
+    BZ   0
+    LEA  -9
+    PSH 
+    LEA  -7
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  4
+    SUB 
+    LI  
+    PSH 
+    LEA  -9
+    LI  
+    ADD 
+    SI  
+511:     else if (i == SUB) a = *sp++ -  a;
+    JMP  0
+    LEA  -11
+    LI  
+    PSH 
+    IMM  26
+    EQ  
+    BZ   0
+    LEA  -9
+    PSH 
+    LEA  -7
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  4
+    SUB 
+    LI  
+    PSH 
+    LEA  -9
+    LI  
+    SUB 
+    SI  
+512:     else if (i == MUL) a = *sp++ *  a;
+    JMP  0
+    LEA  -11
+    LI  
+    PSH 
+    IMM  27
+    EQ  
+    BZ   0
+    LEA  -9
+    PSH 
+    LEA  -7
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  4
+    SUB 
+    LI  
+    PSH 
+    LEA  -9
+    LI  
+    MUL 
+    SI  
+513:     else if (i == DIV) a = *sp++ /  a;
+    JMP  0
+    LEA  -11
+    LI  
+    PSH 
+    IMM  28
+    EQ  
+    BZ   0
+    LEA  -9
+    PSH 
+    LEA  -7
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  4
+    SUB 
+    LI  
+    PSH 
+    LEA  -9
+    LI  
+    DIV 
+    SI  
+514:     else if (i == MOD) a = *sp++ %  a;
+    JMP  0
+    LEA  -11
+    LI  
+    PSH 
+    IMM  29
+    EQ  
+    BZ   0
+    LEA  -9
+    PSH 
+    LEA  -7
+    PSH 
+    LI  
+    PSH 
+    IMM  4
+    ADD 
+    SI  
+    PSH 
+    IMM  4
+    SUB 
+    LI  
+    PSH 
+    LEA  -9
+    LI  
+    MOD 
+    SI  
+515: 
+516:     else if (i == OPEN) a = open((char *)sp[1], *sp);
+    JMP  0
+    LEA  -11
+    LI  
+    PSH 
+    IMM  30
+    EQ  
+    BZ   0
+    LEA  -9
+    PSH 
+    LEA  -7
+    LI  
+    PSH 
+    IMM  1
+    PSH 
+    IMM  4
+    MUL 
+    ADD 
+    LI  
+    PSH 
+    LEA  -7
+    LI  
+    LI  
+    PSH 
+    OPEN
+    ADJ  2
+    SI  
+517:     else if (i == READ) a = read(sp[2], (char *)sp[1], *sp);
+    JMP  0
+    LEA  -11
+    LI  
+    PSH 
+    IMM  31
+    EQ  
+    BZ   0
+    LEA  -9
+    PSH 
+    LEA  -7
+    LI  
+    PSH 
+    IMM  2
+    PSH 
+    IMM  4
+    MUL 
+    ADD 
+    LI  
+    PSH 
+    LEA  -7
+    LI  
+    PSH 
+    IMM  1
+    PSH 
+    IMM  4
+    MUL 
+    ADD 
+    LI  
+    PSH 
+    LEA  -7
+    LI  
+    LI  
+    PSH 
+    READ
+    ADJ  3
+    SI  
+518:     else if (i == CLOS) a = close(*sp);
+    JMP  0
+    LEA  -11
+    LI  
+    PSH 
+    IMM  32
+    EQ  
+    BZ   0
+    LEA  -9
+    PSH 
+    LEA  -7
+    LI  
+    LI  
+    PSH 
+    CLOS
+    ADJ  1
+    SI  
+519:     else if (i == PRTF) { t = sp + pc[1]; a = printf((char *)t[-1], t[-2], t[-3], t[-4], t[-5], t[-6]); }
+    JMP  0
+    LEA  -11
+    LI  
+    PSH 
+    IMM  33
+    EQ  
+    BZ   0
+    LEA  -12
+    PSH 
+    LEA  -7
+    LI  
+    PSH 
+    LEA  -6
+    LI  
+    PSH 
+    IMM  1
+    PSH 
+    IMM  4
+    MUL 
+    ADD 
+    LI  
+    PSH 
+    IMM  4
+    MUL 
+    ADD 
+    SI  
+    LEA  -9
+    PSH 
+    LEA  -12
+    LI  
+    PSH 
+    IMM  -1
+    PSH 
+    IMM  4
+    MUL 
+    ADD 
+    LI  
+    PSH 
+    LEA  -12
+    LI  
+    PSH 
+    IMM  -2
+    PSH 
+    IMM  4
+    MUL 
+    ADD 
+    LI  
+    PSH 
+    LEA  -12
+    LI  
+    PSH 
+    IMM  -3
+    PSH 
+    IMM  4
+    MUL 
+    ADD 
+    LI  
+    PSH 
+    LEA  -12
+    LI  
+    PSH 
+    IMM  -4
+    PSH 
+    IMM  4
+    MUL 
+    ADD 
+    LI  
+    PSH 
+    LEA  -12
+    LI  
+    PSH 
+    IMM  -5
+    PSH 
+    IMM  4
+    MUL 
+    ADD 
+    LI  
+    PSH 
+    LEA  -12
+    LI  
+    PSH 
+    IMM  -6
+    PSH 
+    IMM  4
+    MUL 
+    ADD 
+    LI  
+    PSH 
+    PRTF
+    ADJ  6
+    SI  
+520:     else if (i == MALC) a = (int)malloc(*sp);
+    JMP  0
+    LEA  -11
+    LI  
+    PSH 
+    IMM  34
+    EQ  
+    BZ   0
+    LEA  -9
+    PSH 
+    LEA  -7
+    LI  
+    LI  
+    PSH 
+    MALC
+    ADJ  1
+    SI  
+521:     else if (i == FREE) free((void *)*sp);
+    JMP  0
+    LEA  -11
+    LI  
+    PSH 
+    IMM  35
+    EQ  
+    BZ   0
+    LEA  -7
+    LI  
+    LI  
+    PSH 
+    FREE
+    ADJ  1
+522:     else if (i == MSET) a = (int)memset((char *)sp[2], sp[1], *sp);
+    JMP  0
+    LEA  -11
+    LI  
+    PSH 
+    IMM  36
+    EQ  
+    BZ   0
+    LEA  -9
+    PSH 
+    LEA  -7
+    LI  
+    PSH 
+    IMM  2
+    PSH 
+    IMM  4
+    MUL 
+    ADD 
+    LI  
+    PSH 
+    LEA  -7
+    LI  
+    PSH 
+    IMM  1
+    PSH 
+    IMM  4
+    MUL 
+    ADD 
+    LI  
+    PSH 
+    LEA  -7
+    LI  
+    LI  
+    PSH 
+    MSET
+    ADJ  3
+    SI  
+523:     else if (i == MCMP) a = memcmp((char *)sp[2], (char *)sp[1], *sp);
+    JMP  0
+    LEA  -11
+    LI  
+    PSH 
+    IMM  37
+    EQ  
+    BZ   0
+    LEA  -9
+    PSH 
+    LEA  -7
+    LI  
+    PSH 
+    IMM  2
+    PSH 
+    IMM  4
+    MUL 
+    ADD 
+    LI  
+    PSH 
+    LEA  -7
+    LI  
+    PSH 
+    IMM  1
+    PSH 
+    IMM  4
+    MUL 
+    ADD 
+    LI  
+    PSH 
+    LEA  -7
+    LI  
+    LI  
+    PSH 
+    MCMP
+    ADJ  3
+    SI  
+524:     else if (i == EXIT) { printf("exit(%d) cycle = %d\n", *sp, cycle); return *sp; }
+    JMP  0
+    LEA  -11
+    LI  
+    PSH 
+    IMM  38
+    EQ  
+    BZ   0
+    IMM  40830816
+    PSH 
+    LEA  -7
+    LI  
+    LI  
+    PSH 
+    LEA  -10
+    LI  
+    PSH 
+    PRTF
+    ADJ  3
+    LEA  -7
+    LI  
+    LI  
+    LEV 
+525:     else { printf("unknown instruction = %d! cycle = %d\n", i, cycle); return -1; }
+    JMP  0
+    IMM  40830840
+    PSH 
+    LEA  -11
+    LI  
+    PSH 
+    LEA  -10
+    LI  
+    PSH 
+    PRTF
+    ADJ  3
+    IMM  -1
+    LEV 
+526:   }
+527: }
+    JMP  40597780
+    LEV 

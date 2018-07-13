@@ -1,0 +1,70 @@
+1: #include <stdio.h>
+2: 
+3: int fact(int n) {
+4:     int r;
+5:     r = 1;
+    ENT  1
+    LEA  -1
+    PSH 
+    IMM  1
+    SI  
+6:     while (n > 0) {
+    LEA  2
+    LI  
+    PSH 
+    IMM  0
+    GT  
+    BZ   0
+7:         r = r * n;
+    LEA  -1
+    PSH 
+    LEA  -1
+    LI  
+    PSH 
+    LEA  2
+    LI  
+    MUL 
+    SI  
+8:         printf("n = %d, r = %d\n", n, r);
+    IMM  40566872
+    PSH 
+    LEA  2
+    LI  
+    PSH 
+    LEA  -1
+    LI  
+    PSH 
+    PRTF
+    ADJ  3
+9:         --n;
+    LEA  2
+    PSH 
+    LI  
+    PSH 
+    IMM  1
+    SUB 
+    SI  
+10:     }
+11:     return r;
+    JMP  40304756
+    LEA  -1
+    LI  
+    LEV 
+12: }
+    LEV 
+13: 
+14: int main(int argc, char **argv) {
+15:     printf("%d\n", fact(8));
+    ENT  0
+    IMM  40566888
+    PSH 
+    IMM  8
+    PSH 
+    JSR  40304724
+    ADJ  1
+    PSH 
+    PRTF
+    ADJ  2
+16:     return 0;
+    IMM  0
+    LEV 

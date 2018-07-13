@@ -1,0 +1,11 @@
+1> ENT  0
+2> IMM  44105816
+3> PSH 
+4> PRTF
+hello, world
+5> ADJ  1
+6> IMM  0
+7> LEV 
+8> PSH 
+9> EXIT
+exit(0) cycle = 9
