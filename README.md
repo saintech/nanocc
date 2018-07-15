@@ -1,5 +1,10 @@
 # nanocc
 
+[![Build Status](https://travis-ci.org/saintech/nanocc.svg?branch=master)](https://travis-ci.org/saintech/nanocc)
+[![Coverage Status](https://coveralls.io/repos/github/saintech/nanocc/badge.svg?branch=master)](https://coveralls.io/github/saintech/nanocc?branch=master)
+[![Go Report Card](https://goreportcard.com/badge/github.com/saintech/nanocc)](https://goreportcard.com/report/github.com/saintech/nanocc)
+[![Lines of Go Code](https://img.shields.io/badge/dynamic/json.svg?label=go%20lines&url=https%3A%2F%2Fapi.codetabs.com%2Fcount-loc%2Fget%3Frepo%3Dsaintech%2Fnanocc&query=%24%5B%3F(%40.language%3D%3D%22Go%22)%5D.linesOfCode&colorB=5272B4&maxAge=300)](https://api.codetabs.com/count-loc/get?repo=saintech/nanocc)
+
 ## A Nano C Compiller & VM
 
 **nanocc** is port of very primitive "C to custom bytecode" compiller and runner - [rswier/c4][1]. This port is mostly a line-by-line translation from c to go, and is in parity with commit [3f098f3][2].
