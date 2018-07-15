@@ -43,7 +43,7 @@ $ cd $(go env GOPATH)/src/github.com/saintech/nanocc/testdata
 
 # Usage
 $ nanocc
-usage: c4 [-s] [-d] file ...
+usage: nanocc [-s] [-d] file ...
 
 # Compile and run hello.c
 $ nanocc hello.c
